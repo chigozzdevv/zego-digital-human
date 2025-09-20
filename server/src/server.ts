@@ -232,10 +232,12 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         InterruptMode: 0
       },
       DigitalHuman: {
-        DigitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
-        ConfigId: config_id || 'web'
+        DigitalHumanId: digital_human_id,
+        ConfigId: config_id
       }
     }
+
+    console.log('Full digitalHumanConfig:', JSON.stringify(digitalHumanConfig, null, 2))
     
     const result = await makeZegoRequest('CreateDigitalHumanAgentInstance', digitalHumanConfig)
 
