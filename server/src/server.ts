@@ -17,7 +17,7 @@ const CONFIG = {
   ZEGO_APP_ID: process.env.ZEGO_APP_ID!,
   ZEGO_SERVER_SECRET: process.env.ZEGO_SERVER_SECRET!,
   ZEGO_API_BASE_URL: 'https://aigc-aiagent-api.zegotech.cn/',
-  DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY || '',
+  DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY,
   PORT: parseInt(process.env.PORT || '8080', 10)
 }
 
@@ -85,9 +85,7 @@ async function registerAgent(): Promise<string> {
       Vendor: 'CosyVoice',
       Params: {
         app: {
-          api_key: CONFIG.DASHSCOPE_API_KEY || (() => {
-            throw new Error('DASHSCOPE_API_KEY is required for TTS. Please set it in your .env file.')
-          })()
+          api_key: CONFIG.DASHSCOPE_API_KEY || 'zego_test'
         },
         payload: {
           model: 'cosyvoice-v2',
@@ -238,9 +236,18 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     }
     
     const result = await makeZegoRequest('CreateDigitalHumanAgentInstance', digitalHumanConfig)
-    
+
     if (result.Code !== 0) {
-      res.status(400).json({ error: result.Message || 'Failed to create digital human instance' })
+      console.error('ZEGO CreateDigitalHumanAgentInstance failed:', {
+        code: result.Code,
+        message: result.Message,
+        config: digitalHumanConfig
+      })
+      res.status(400).json({
+        error: result.Message || 'Failed to create digital human instance',
+        code: result.Code,
+        details: result.Message
+      })
       return
     }
     
