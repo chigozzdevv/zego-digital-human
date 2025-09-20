@@ -109,8 +109,8 @@ async function registerAgent(): Promise<string> {
     },
     ASR: {
       HotWord: 'interview|10,experience|8,project|8,team|8,challenge|8,skills|8',
-      VADSilenceSegmentation: 2000,  // Wait 2 seconds of silence for complete responses
-      PauseInterval: 3000  // Allow longer pauses for thoughtful answers
+      VADSilenceSegmentation: 1500,  // Wait 1.5 seconds of silence for complete responses
+      PauseInterval: 2000  // Allow pauses for thoughtful answers (max 2000ms)
     }
   }
   
