@@ -192,7 +192,9 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/start-digital-human', async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id, user_id, user_stream_id, digital_human_id, config_id } = req.body
-    
+
+    console.log('Digital human request params:', { room_id, user_id, user_stream_id, digital_human_id, config_id })
+
     if (!room_id || !user_id) {
       res.status(400).json({ error: 'room_id and user_id required' })
       return
