@@ -1,0 +1,436 @@
+import { ZegoExpressEngine } from 'zego-express-engine-webrtc'
+import { config } from '../config'
+import { digitalHumanAPI } from './digitalHumanAPI'
+
+export class ZegoService {
+  private static instance: ZegoService
+  private zg: ZegoExpressEngine | null = null
+  private isInitialized = false
+  private currentRoomId: string | null = null
+  private currentUserId: string | null = null
+  private localStream: any = null
+  private isJoining = false
+  private audioElement: HTMLAudioElement | null = null
+  private videoElement: HTMLVideoElement | null = null
+
+  static getInstance(): ZegoService {
+    if (!ZegoService.instance) {
+      ZegoService.instance = new ZegoService()
+    }
+    return ZegoService.instance
+  }
+
+  async initialize(): Promise<void> {
+    if (this.isInitialized || this.isJoining) return
+
+    this.isJoining = true
+    try {
+      this.zg = new ZegoExpressEngine(
+        parseInt(config.ZEGO_APP_ID), 
+        config.ZEGO_SERVER
+      )
+      
+      this.setupEventListeners()
+      this.setupMediaElements()
+      this.isInitialized = true
+      console.log('✅ ZEGO initialized successfully with digital human support')
+    } catch (error) {
+      console.error('❌ ZEGO initialization failed:', error)
+      throw error
+    } finally {
+      this.isJoining = false
+    }
+  }
+
+  private setupMediaElements(): void {
+    // Setup audio element for AI voice
+    this.audioElement = document.getElementById('ai-audio-output') as HTMLAudioElement
+    if (!this.audioElement) {
+      this.audioElement = document.createElement('audio')
+      this.audioElement.id = 'ai-audio-output'
+      this.audioElement.autoplay = true
+      this.audioElement.controls = false
+      this.audioElement.style.display = 'none'
+      document.body.appendChild(this.audioElement)
+    }
+
+    // Setup video element for digital human
+    this.videoElement = document.getElementById('digital-human-video') as HTMLVideoElement
+    if (!this.videoElement) {
+      this.videoElement = document.createElement('video')
+      this.videoElement.id = 'digital-human-video'
+      this.videoElement.autoplay = true
+      this.videoElement.playsInline = true
+      this.videoElement.muted = false
+      this.videoElement.controls = false
+      this.videoElement.style.width = '100%'
+      this.videoElement.style.height = '100%'
+      this.videoElement.style.objectFit = 'cover'
+      
+      // Find digital human container and append
+      const container = document.querySelector('[data-digital-human-container]')
+      if (container) {
+        container.appendChild(this.videoElement)
+      }
+    }
+
+    this.setupMediaEventListeners()
+  }
+
+  private setupMediaEventListeners(): void {
+    if (this.audioElement) {
+      this.audioElement.addEventListener('loadstart', () => {
+        console.log('🔊 Audio loading started')
+      })
+
+      this.audioElement.addEventListener('canplay', () => {
+        console.log('🔊 Audio ready to play')
+      })
+
+      this.audioElement.addEventListener('play', () => {
+        console.log('🔊 Audio playback started')
+      })
+
+      this.audioElement.addEventListener('error', (e) => {
+        console.error('❌ Audio error:', e)
+      })
+    }
+
+    if (this.videoElement) {
+      this.videoElement.addEventListener('loadstart', () => {
+        console.log('📹 Digital human video loading started')
+      })
+
+      this.videoElement.addEventListener('canplay', () => {
+        console.log('📹 Digital human video ready to play')
+      })
+
+      this.videoElement.addEventListener('play', () => {
+        console.log('📹 Digital human video playback started')
+      })
+
+      this.videoElement.addEventListener('error', (e) => {
+        console.error('❌ Digital human video error:', e)
+      })
+    }
+  }
+
+  private setupEventListeners(): void {
+    if (!this.zg) return
+
+    this.zg.on('recvExperimentalAPI', (result: any) => {
+      const { method, content } = result
+      if (method === 'onRecvRoomChannelMessage') {
+        try {
+          const message = JSON.parse(content.msgContent)
+          console.log('🎯 Room message received:', message)
+          this.handleRoomMessage(message)
+        } catch (error) {
+          console.error('Failed to parse room message:', error)
+        }
+      }
+    })
+
+    this.zg.on('roomStreamUpdate', async (_roomID: string, updateType: string, streamList: any[]) => {
+      console.log('📡 Stream update:', updateType, streamList.length, 'streams')
+      
+      if (updateType === 'ADD' && streamList.length > 0) {
+        for (const stream of streamList) {
+          const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
+          
+          if (userStreamId && stream.streamID === userStreamId) {
+            console.log('🚫 Skipping user\'s own stream:', stream.streamID)
+            continue
+          }
+
+          try {
+            console.log('🔗 Playing digital human stream:', stream.streamID)
+            
+            const mediaStream = await this.zg!.startPlayingStream(stream.streamID)
+            if (mediaStream) {
+              console.log('✅ Media stream received:', mediaStream)
+              
+              // Check if this is a video stream (has video tracks)
+              const videoTracks = mediaStream.getVideoTracks()
+              const audioTracks = mediaStream.getAudioTracks()
+              
+              if (videoTracks && videoTracks.length > 0 && this.videoElement) {
+                // This is a digital human video stream
+                console.log('📹 Setting up digital human video stream')
+                this.videoElement.srcObject = mediaStream
+                
+                try {
+                  await this.videoElement.play()
+                  console.log('✅ Digital human video playing successfully')
+                } catch (playError) {
+                  console.error('❌ Failed to play digital human video:', playError)
+                }
+              }
+              
+              if (audioTracks && audioTracks.length > 0 && this.audioElement) {
+                // Audio stream - could be from digital human or regular agent
+                console.log('🔊 Setting up audio stream')
+                
+                // Create a new audio element for this specific stream
+                const streamAudio = document.createElement('audio')
+                streamAudio.autoplay = true
+                streamAudio.srcObject = mediaStream
+                streamAudio.volume = 0.8
+                streamAudio.muted = false
+                
+                try {
+                  await streamAudio.play()
+                  console.log('✅ Audio stream playing successfully')
+                } catch (playError) {
+                  console.error('❌ Failed to play audio stream:', playError)
+                }
+              }
+              
+              // Fallback: use createRemoteStreamView for compatibility
+              const remoteView = await this.zg!.createRemoteStreamView(mediaStream)
+              if (remoteView) {
+                try {
+                  if (videoTracks && videoTracks.length > 0 && this.videoElement) {
+                    await remoteView.play(this.videoElement, { 
+                      enableAutoplayDialog: false,
+                      muted: false
+                    })
+                  } else if (this.audioElement) {
+                    await remoteView.play(this.audioElement, { 
+                      enableAutoplayDialog: false,
+                      muted: false
+                    })
+                  }
+                  console.log('✅ Digital human stream connected via remoteView')
+                } catch (playError) {
+                  console.error('❌ Failed to play via remoteView:', playError)
+                }
+              }
+            }
+          } catch (error) {
+            console.error('❌ Failed to play agent stream:', error)
+          }
+        }
+      } else if (updateType === 'DELETE') {
+        console.log('📴 Agent stream disconnected')
+        if (this.audioElement) {
+          this.audioElement.srcObject = null
+        }
+        if (this.videoElement) {
+          this.videoElement.srcObject = null
+        }
+      }
+    })
+
+    this.zg.on('roomUserUpdate', (_roomID: string, updateType: string, userList: any[]) => {
+      console.log('👥 Room user update:', updateType, userList.length, 'users')
+    })
+
+    this.zg.on('roomStateChanged', (roomID: string, reason: string, errorCode: number) => {
+      console.log('🏠 Room state changed:', { roomID, reason, errorCode })
+    })
+
+    this.zg.on('networkQuality', (userID: string, upstreamQuality: number, downstreamQuality: number) => {
+      if (upstreamQuality > 2 || downstreamQuality > 2) {
+        console.warn('📶 Network quality issues:', { userID, upstreamQuality, downstreamQuality })
+      }
+    })
+
+    this.zg.on('publisherStateUpdate', (result: any) => {
+      console.log('📤 Publisher state update:', result)
+    })
+
+    this.zg.on('playerStateUpdate', (result: any) => {
+      console.log('📥 Player state update:', result)
+    })
+  }
+
+  private messageCallback: ((message: any) => void) | null = null
+
+  private handleRoomMessage(message: any): void {
+    if (this.messageCallback) {
+      this.messageCallback(message)
+    }
+  }
+
+  async joinRoom(roomId: string, userId: string): Promise<boolean> {
+    if (!this.zg) {
+      console.error('❌ ZEGO not initialized')
+      return false
+    }
+
+    if (this.currentRoomId === roomId && this.currentUserId === userId) {
+      console.log('ℹ️ Already in the same room')
+      return true
+    }
+
+    try {
+      if (this.currentRoomId) {
+        console.log('🔄 Leaving previous room before joining new one')
+        await this.leaveRoom()
+      }
+
+      this.currentRoomId = roomId
+      this.currentUserId = userId
+
+      console.log('🔑 Getting token for user:', userId)
+      const { token } = await digitalHumanAPI.getToken(userId)
+
+      console.log('🚪 Logging into room:', roomId)
+      await this.zg.loginRoom(roomId, token, {
+        userID: userId,
+        userName: userId
+      })
+
+      console.log('📢 Enabling room message reception')
+      this.zg.callExperimentalAPI({ 
+        method: 'onRecvRoomChannelMessage', 
+        params: {} 
+      })
+
+      console.log('🎤 Creating local stream for interview')
+      const localStream = await this.zg.createZegoStream({
+        camera: { 
+          video: false,  // Audio only for candidate
+          audio: true
+        }
+      })
+
+      if (localStream) {
+        this.localStream = localStream
+        const streamId = `${userId}_stream`
+        
+        console.log('📤 Publishing candidate stream:', streamId)
+        await this.zg.startPublishingStream(streamId, localStream, {
+          enableAutoSwitchVideoCodec: true
+        })
+        
+        console.log('✅ Interview room joined successfully')
+        return true
+      } else {
+        throw new Error('Failed to create local stream')
+      }
+    } catch (error) {
+      console.error('❌ Failed to join interview room:', error)
+      this.currentRoomId = null
+      this.currentUserId = null
+      return false
+    }
+  }
+
+  async enableMicrophone(enabled: boolean): Promise<boolean> {
+    if (!this.zg || !this.localStream) {
+      console.warn('⚠️ Cannot toggle microphone: no stream available')
+      return false
+    }
+
+    try {
+      if (this.localStream.getAudioTracks) {
+        const audioTrack = this.localStream.getAudioTracks()[0]
+        if (audioTrack) {
+          audioTrack.enabled = enabled
+          console.log(`🎤 Microphone ${enabled ? 'enabled' : 'disabled'}`)
+          return true
+        }
+      }
+      
+      console.warn('⚠️ No audio track found in local stream')
+      return false
+    } catch (error) {
+      console.error('❌ Failed to toggle microphone:', error)
+      return false
+    }
+  }
+
+  async leaveRoom(): Promise<void> {
+    if (!this.zg || !this.currentRoomId) {
+      console.log('ℹ️ No room to leave')
+      return
+    }
+
+    try {
+      console.log('🚪 Leaving interview room:', this.currentRoomId)
+      
+      if (this.currentUserId && this.localStream) {
+        const streamId = `${this.currentUserId}_stream`
+        console.log('📤 Stopping stream publication:', streamId)
+        await this.zg.stopPublishingStream(streamId)
+      }
+      
+      if (this.localStream) {
+        console.log('🗑️ Destroying local stream')
+        this.zg.destroyStream(this.localStream)
+        this.localStream = null
+      }
+      
+      await this.zg.logoutRoom()
+      
+      // Clean up media elements
+      if (this.audioElement) {
+        this.audioElement.srcObject = null
+      }
+      if (this.videoElement) {
+        this.videoElement.srcObject = null
+      }
+      
+      this.currentRoomId = null
+      this.currentUserId = null
+      
+      console.log('✅ Left interview room successfully')
+    } catch (error) {
+      console.error('❌ Failed to leave interview room:', error)
+      this.currentRoomId = null
+      this.currentUserId = null
+      this.localStream = null
+    }
+  }
+
+  onRoomMessage(callback: (message: any) => void): void {
+    this.messageCallback = callback
+  }
+
+  getCurrentRoomId(): string | null {
+    return this.currentRoomId
+  }
+
+  getCurrentUserId(): string | null {
+    return this.currentUserId
+  }
+
+  getEngine(): ZegoExpressEngine | null {
+    return this.zg
+  }
+
+  isInRoom(): boolean {
+    return !!this.currentRoomId && !!this.currentUserId
+  }
+
+  // Digital human specific methods
+  getVideoElement(): HTMLVideoElement | null {
+    return this.videoElement
+  }
+
+  getAudioElement(): HTMLAudioElement | null {
+    return this.audioElement
+  }
+
+  destroy(): void {
+    if (this.zg) {
+      this.leaveRoom()
+      this.zg = null
+      this.isInitialized = false
+      
+      if (this.audioElement && this.audioElement.parentNode) {
+        this.audioElement.parentNode.removeChild(this.audioElement)
+        this.audioElement = null
+      }
+      
+      if (this.videoElement && this.videoElement.parentNode) {
+        this.videoElement.parentNode.removeChild(this.videoElement)
+        this.videoElement = null
+      }
+      
+      console.log('🗑️ ZEGO service destroyed')
+    }
+  }
+}
