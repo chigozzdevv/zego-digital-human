@@ -84,8 +84,10 @@ async function registerAgent(): Promise<string> {
     TTS: {
       Vendor: 'CosyVoice',
       Params: {
-        app: { 
-          api_key: 'zego_test'
+        app: {
+          api_key: CONFIG.DASHSCOPE_API_KEY || (() => {
+            throw new Error('DASHSCOPE_API_KEY is required for TTS. Please set it in your .env file.')
+          })()
         },
         payload: {
           model: 'cosyvoice-v2',
