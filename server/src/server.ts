@@ -215,6 +215,48 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         AgentStreamId: agentStreamId,
         UserStreamId: userStreamId
       },
+      LLM: {
+        Url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+        ApiKey: CONFIG.DASHSCOPE_API_KEY || 'zego_test',
+        Model: 'qwen-plus',
+        SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
+        Temperature: 0.8,
+        TopP: 0.9,
+        Params: {
+          max_tokens: 150
+        }
+      },
+      TTS: {
+        Vendor: 'CosyVoice',
+        Params: {
+          app: {
+            api_key: CONFIG.DASHSCOPE_API_KEY || 'zego_test'
+          },
+          payload: {
+            model: 'cosyvoice-v2',
+            parameters: {
+              voice: 'longxiaochun_v2',
+              speed: 1.0,
+              volume: 0.8
+            }
+          }
+        },
+        FilterText: [
+          {
+            BeginCharacters: '(',
+            EndCharacters: ')'
+          },
+          {
+            BeginCharacters: '[',
+            EndCharacters: ']'
+          }
+        ]
+      },
+      ASR: {
+        HotWord: 'interview|10,experience|8,project|8,team|8,challenge|8,skills|8',
+        VADSilenceSegmentation: 1500,
+        PauseInterval: 2000
+      },
       MessageHistory: {
         SyncMode: 1,
         Messages: [],
