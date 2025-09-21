@@ -274,7 +274,7 @@ export class ZegoService {
       this.currentUserId = userId
 
       console.log('🔑 Getting token for user:', userId)
-      const { token } = await digitalHumanAPI.getToken(userId)
+      const { token } = await digitalHumanAPI.getToken(userId, roomId)
 
       console.log('🚪 Logging into room:', roomId)
       await this.zg.loginRoom(roomId, token, {

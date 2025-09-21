@@ -85,7 +85,7 @@ async function registerAgent(): Promise<string> {
       Vendor: 'CosyVoice',
       Params: {
         app: {
-          api_key: CONFIG.DASHSCOPE_API_KEY || 'zego_test'
+          api_key: CONFIG.DASHSCOPE_API_KEY
         },
         payload: {
           model: 'cosyvoice-v2',
@@ -109,8 +109,8 @@ async function registerAgent(): Promise<string> {
     },
     ASR: {
       HotWord: 'interview|10,experience|8,project|8,team|8,challenge|8,skills|8',
-      VADSilenceSegmentation: 1500,  // Wait 1.5 seconds of silence for complete responses
-      PauseInterval: 2000  // Allow pauses for thoughtful answers (max 2000ms)
+      VADSilenceSegmentation: 1500,
+      PauseInterval: 2000 
     }
   }
   
@@ -188,7 +188,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
-// Digital Human interview endpoint
+
 app.post('/api/start-digital-human', async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id, user_id, user_stream_id, digital_human_id, config_id } = req.body

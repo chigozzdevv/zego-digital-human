@@ -135,22 +135,27 @@ export const agentAPI = {
     }
   },
 
-  async getToken(userId: string): Promise<{ token: string }> {
+  async getToken(userId: string, roomId?: string): Promise<{ token: string }> {
     if (!userId) {
       throw new Error('User ID is required')
     }
 
     try {
-      console.log('🔑 Getting token for user:', userId)
-      
-      const response = await api.get(`/api/token?user_id=${encodeURIComponent(userId)}`)
-      
+      console.log('🔑 Getting token for user:', userId, 'roomId:', roomId)
+
+      const params = new URLSearchParams({ user_id: userId })
+      if (roomId) {
+        params.append('room_id', roomId)
+      }
+
+      const response = await api.get(`/api/token?${params.toString()}`)
+
       if (!response.data || !response.data.token) {
         throw new Error('No token returned')
       }
-      
+
       console.log('✅ Token received successfully')
-      
+
       return { token: response.data.token }
     } catch (error: any) {
       console.error('❌ Get token failed:', error.response?.data || error.message)
