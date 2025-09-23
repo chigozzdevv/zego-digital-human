@@ -23,6 +23,51 @@ const CONFIG = {
 
 let REGISTERED_AGENT_ID: string | null = null
 
+const baseAgentConfig = {
+  LLM: {
+    Url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+    ApiKey: CONFIG.DASHSCOPE_API_KEY || 'zego_test',
+    Model: 'qwen-plus',
+    SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
+    Temperature: 0.8,
+    TopP: 0.9,
+    Params: {
+      max_tokens: 150
+    }
+  },
+  TTS: {
+    Vendor: 'CosyVoice',
+    Params: {
+      app: {
+        api_key: CONFIG.DASHSCOPE_API_KEY || 'zego_test'
+      },
+      payload: {
+        model: 'cosyvoice-v2',
+        parameters: {
+          voice: 'longxiaochun_v2',
+          speed: 1.0,
+          volume: 0.8
+        }
+      }
+    },
+    FilterText: [
+      {
+        BeginCharacters: '(',
+        EndCharacters: ')'
+      },
+      {
+        BeginCharacters: '[',
+        EndCharacters: ']'
+      }
+    ]
+  },
+  ASR: {
+    HotWord: 'interview|10,experience|8,project|8,team|8,challenge|8,skills|8',
+    VADSilenceSegmentation: 1500,
+    PauseInterval: 2000
+  }
+}
+
 function generateZegoSignature(action: string) {
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = crypto.randomBytes(8).toString('hex')
@@ -104,48 +149,7 @@ async function registerAgent(): Promise<string> {
   const agentConfig = {
     AgentId: agentId,
     Name: 'AI Interview Assistant',
-    LLM: {
-      Url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
-      ApiKey: CONFIG.DASHSCOPE_API_KEY || 'zego_test',
-      Model: 'qwen-plus',
-      SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
-      Temperature: 0.8,
-      TopP: 0.9,
-      Params: { 
-        max_tokens: 150
-      }
-    },
-    TTS: {
-      Vendor: 'CosyVoice',
-      Params: {
-        app: {
-          api_key: CONFIG.DASHSCOPE_API_KEY || 'zego_test'
-        },
-        payload: {
-          model: 'cosyvoice-v2',
-          parameters: {
-            voice: 'longxiaochun_v2',
-            speed: 1.0,
-            volume: 0.8
-          }
-        }
-      },
-      FilterText: [
-        {
-          BeginCharacters: '(',
-          EndCharacters: ')'
-        },
-        {
-          BeginCharacters: '[',
-          EndCharacters: ']'
-        }
-      ]
-    },
-    ASR: {
-      HotWord: 'interview|10,experience|8,project|8,team|8,challenge|8,skills|8',
-      VADSilenceSegmentation: 1500,
-      PauseInterval: 2000 
-    }
+    ...baseAgentConfig
   }
   
   const result = await makeZegoRequest('RegisterAgent', agentConfig)
@@ -177,6 +181,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     const instanceConfig = {
       AgentId: agentId,
       UserId: user_id,
+      ...baseAgentConfig,
       RTC: {
         RoomId: room_id,
         AgentUserId: agentUserId,
@@ -239,10 +244,20 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const userStreamId = user_stream_id || `${user_id}_stream`
     const agentUserId = createRtcUserId('interviewer', room_id)
     const agentStreamId = createRtcStreamId('interviewer_stream', room_id)
+
+    console.log('Digital human identifiers:', {
+      agentUserId,
+      agentUserIdLength: agentUserId.length,
+      agentStreamId,
+      agentStreamIdLength: agentStreamId.length,
+      userStreamId,
+      userStreamIdLength: userStreamId.length
+    })
     
     const digitalHumanConfig = {
       AgentId: agentId,
       UserId: user_id,
+      ...baseAgentConfig,
       RTC: {
         RoomId: room_id,
         AgentUserId: agentUserId,
