@@ -93,7 +93,7 @@ function createRtcUserId(prefix: string, roomId: string, maxLength = 32): string
   return createRtcIdentifier(prefix, roomId, maxLength);
 }
 
-function createRtcStreamId(prefix: string, roomId: string, maxLength = 48): string {
+function createRtcStreamId(prefix: string, roomId: string, maxLength = 32): string {
   return createRtcIdentifier(prefix, roomId, maxLength);
 }
 
@@ -441,6 +441,7 @@ app.listen(CONFIG.PORT, () => {
   console.log(`🤖 Digital Human support: enabled`)
   console.log(`🔊 Voice interaction: enabled`)
 })
+
 
 
 
