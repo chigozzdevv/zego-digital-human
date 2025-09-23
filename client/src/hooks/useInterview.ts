@@ -4,6 +4,12 @@ import { ZegoService } from '../services/zego'
 import { digitalHumanAPI } from '../services/digitalHumanAPI'
 import { INTERVIEW_QUESTIONS } from '../data/questions'
 
+const generateRtcId = (prefix: string): string => {
+  const timestamp = Date.now().toString(36)
+  const random = Math.random().toString(36).slice(2, 8)
+  return `${prefix}_${timestamp}_${random}`
+}
+
 interface InterviewState {
   messages: Message[]
   session: ChatSession | null
@@ -198,7 +204,7 @@ export const useInterview = () => {
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
             
             if (EndFlag) {
-              const messageId = MessageId || `voice_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
+              const messageId = MessageId || `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
               
               const userMessage: Message = {
                 id: messageId,
@@ -286,8 +292,8 @@ export const useInterview = () => {
     dispatch({ type: 'SET_START_TIME', payload: Date.now() })
     
     try {
-      const roomId = `interview_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
-      const userId = `candidate_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
+      const roomId = generateRtcId('interview')
+      const userId = generateRtcId('candidate')
 
       await zegoService.current.initialize()
       
@@ -334,7 +340,7 @@ export const useInterview = () => {
     if (!trimmedContent) return
     
     try {
-      const messageId = `text_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
+      const messageId = `text_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       
       const userMessage: Message = {
         id: messageId,

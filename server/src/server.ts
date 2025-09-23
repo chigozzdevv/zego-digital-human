@@ -63,25 +63,38 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
   }
 }
 
-// Ensure RTC user IDs respect ZEGO's 32 character limit
-function createRtcUserId(prefix: string, roomId: string, maxLength = 32): string {
+// Utility helpers that keep RTC identifiers within ZEGO limits
+function createRtcIdentifier(prefix: string, seed: string, maxLength: number): string {
   const normalizedPrefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
-  const sanitizedRoomId = roomId.replace(/[^A-Za-z0-9_-]/g, '');
+  const sanitizedSeed = seed.replace(/[^A-Za-z0-9_-]/g, '');
   const availableLength = maxLength - normalizedPrefix.length;
 
   if (availableLength <= 0) {
     return normalizedPrefix.slice(0, maxLength);
   }
 
-  if (sanitizedRoomId.length <= availableLength) {
-    return `${normalizedPrefix}${sanitizedRoomId}`;
+  const hash = crypto.createHash('md5').update(seed).digest('hex');
+
+  if (!sanitizedSeed) {
+    return `${normalizedPrefix}${hash.slice(0, availableLength)}`;
   }
 
-  const hash = crypto.createHash('md5').update(roomId).digest('hex');
-  const hashLength = Math.min(6, availableLength);
-  const trimmedRoomId = sanitizedRoomId.slice(0, availableLength - hashLength);
+  if (sanitizedSeed.length <= availableLength) {
+    return `${normalizedPrefix}${sanitizedSeed}`;
+  }
 
-  return `${normalizedPrefix}${trimmedRoomId}${hash.slice(0, hashLength)}`;
+  const hashLength = Math.min(6, Math.max(availableLength - 1, 1));
+  const trimmedSeed = sanitizedSeed.slice(0, Math.max(availableLength - hashLength, 0));
+
+  return `${normalizedPrefix}${trimmedSeed}${hash.slice(0, hashLength)}`;
+}
+
+function createRtcUserId(prefix: string, roomId: string, maxLength = 32): string {
+  return createRtcIdentifier(prefix, roomId, maxLength);
+}
+
+function createRtcStreamId(prefix: string, roomId: string, maxLength = 48): string {
+  return createRtcIdentifier(prefix, roomId, maxLength);
 }
 
 async function registerAgent(): Promise<string> {
@@ -159,7 +172,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     
     const userStreamId = user_stream_id || `${user_id}_stream`
     const agentUserId = createRtcUserId('agent', room_id)
-    const agentStreamId = `agent_stream_${room_id}`
+    const agentStreamId = createRtcStreamId('agent_stream', room_id)
     
     const instanceConfig = {
       AgentId: agentId,
@@ -225,7 +238,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     
     const userStreamId = user_stream_id || `${user_id}_stream`
     const agentUserId = createRtcUserId('interviewer', room_id)
-    const agentStreamId = `interviewer_stream_${room_id}`
+    const agentStreamId = createRtcStreamId('interviewer_stream', room_id)
     
     const digitalHumanConfig = {
       AgentId: agentId,
@@ -428,6 +441,7 @@ app.listen(CONFIG.PORT, () => {
   console.log(`🤖 Digital Human support: enabled`)
   console.log(`🔊 Voice interaction: enabled`)
 })
+
 
 
 
