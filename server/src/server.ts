@@ -63,6 +63,27 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
   }
 }
 
+// Ensure RTC user IDs respect ZEGO's 32 character limit
+function createRtcUserId(prefix: string, roomId: string, maxLength = 32): string {
+  const normalizedPrefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
+  const sanitizedRoomId = roomId.replace(/[^A-Za-z0-9_-]/g, '');
+  const availableLength = maxLength - normalizedPrefix.length;
+
+  if (availableLength <= 0) {
+    return normalizedPrefix.slice(0, maxLength);
+  }
+
+  if (sanitizedRoomId.length <= availableLength) {
+    return `${normalizedPrefix}${sanitizedRoomId}`;
+  }
+
+  const hash = crypto.createHash('md5').update(roomId).digest('hex');
+  const hashLength = Math.min(6, availableLength);
+  const trimmedRoomId = sanitizedRoomId.slice(0, availableLength - hashLength);
+
+  return `${normalizedPrefix}${trimmedRoomId}${hash.slice(0, hashLength)}`;
+}
+
 async function registerAgent(): Promise<string> {
   if (REGISTERED_AGENT_ID) return REGISTERED_AGENT_ID
   
@@ -137,7 +158,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     const agentId = await registerAgent()
     
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentUserId = `agent_${room_id}`
+    const agentUserId = createRtcUserId('agent', room_id)
     const agentStreamId = `agent_stream_${room_id}`
     
     const instanceConfig = {
@@ -203,7 +224,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const agentId = await registerAgent()
     
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentUserId = `interviewer_${room_id}`
+    const agentUserId = createRtcUserId('interviewer', room_id)
     const agentStreamId = `interviewer_stream_${room_id}`
     
     const digitalHumanConfig = {
@@ -310,7 +331,7 @@ app.post('/api/send-message', async (req: Request, res: Response): Promise<void>
     const result = await makeZegoRequest('SendAgentInstanceLLM', {
       AgentInstanceId: agent_instance_id,
       Text: message,
-      AddQuestionToHistory: false, // Don't add interviewer questions to history
+      AddQuestionToHistory: false,
       AddAnswerToHistory: true
     })
     
@@ -407,3 +428,11 @@ app.listen(CONFIG.PORT, () => {
   console.log(`🤖 Digital Human support: enabled`)
   console.log(`🔊 Voice interaction: enabled`)
 })
+
+
+
+
+
+
+
+
