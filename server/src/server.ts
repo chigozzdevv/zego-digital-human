@@ -109,29 +109,35 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
 }
 
 // Utility helpers that keep RTC identifiers within ZEGO limits
+function createRtcSuffix(seed: string, length: number): string {
+  if (length <= 0) return '';
+
+  const sanitizedSeed = seed.replace(/[^A-Za-z0-9_-]/g, '');
+  const hash = crypto.createHash('md5').update(seed).digest('hex');
+
+  if (!sanitizedSeed) {
+    return hash.slice(0, Math.min(length, hash.length));
+  }
+
+  if (sanitizedSeed.length <= length) {
+    return sanitizedSeed;
+  }
+
+  const hashLength = Math.min(6, Math.max(length - 1, 1));
+  const trimmedSeed = sanitizedSeed.slice(0, Math.max(length - hashLength, 0));
+  const suffix = `${trimmedSeed}${hash.slice(0, hashLength)}`;
+  return suffix.slice(0, length);
+}
+
 function createRtcIdentifier(prefix: string, seed: string, maxLength: number): string {
   const normalizedPrefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
-  const sanitizedSeed = seed.replace(/[^A-Za-z0-9_-]/g, '');
   const availableLength = maxLength - normalizedPrefix.length;
-
   if (availableLength <= 0) {
     return normalizedPrefix.slice(0, maxLength);
   }
 
-  const hash = crypto.createHash('md5').update(seed).digest('hex');
-
-  if (!sanitizedSeed) {
-    return `${normalizedPrefix}${hash.slice(0, availableLength)}`;
-  }
-
-  if (sanitizedSeed.length <= availableLength) {
-    return `${normalizedPrefix}${sanitizedSeed}`;
-  }
-
-  const hashLength = Math.min(6, Math.max(availableLength - 1, 1));
-  const trimmedSeed = sanitizedSeed.slice(0, Math.max(availableLength - hashLength, 0));
-
-  return `${normalizedPrefix}${trimmedSeed}${hash.slice(0, hashLength)}`;
+  const suffix = createRtcSuffix(seed, availableLength);
+  return `${normalizedPrefix}${suffix}`;
 }
 
 function createRtcUserId(prefix: string, roomId: string, maxLength = 32): string {
@@ -242,8 +248,9 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const agentId = await registerAgent()
     
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentUserId = createRtcUserId('interviewer', room_id)
-    const agentStreamId = createRtcStreamId('interviewer_stream', room_id)
+    const agentSuffix = createRtcSuffix(room_id, 13)
+    const agentUserId = `interviewer_${agentSuffix}`
+    const agentStreamId = `interviewer_stream_${agentSuffix}`
 
     console.log('Digital human identifiers:', {
       agentUserId,
