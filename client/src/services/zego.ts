@@ -21,6 +21,7 @@ export class ZegoService {
   private voiceEnabled = false
   private remoteViews = new Map<string, any>()
   private playingStreamIds = new Set<string>()
+  private audioActivated = new Set<string>()
 
   static getInstance(): ZegoService {
     if (!ZegoService.instance) ZegoService.instance = new ZegoService()
@@ -105,8 +106,8 @@ export class ZegoService {
             const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
             if (remoteView) {
               // Ensure audio can start under autoplay policies; suppress unhandled rejections
-              Promise
-                .resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
+              Promise.resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
+                .then((r: any) => { if (r !== false) this.audioActivated.add(streamId) })
                 .catch(() => {})
               this.remoteViews.set(streamId, remoteView)
               this.markStreamPlaying(streamId)
@@ -150,6 +151,7 @@ export class ZegoService {
           if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch {} }
           this.remoteViews.delete(stream.streamID)
           this.unmarkStreamPlaying(stream.streamID)
+          this.audioActivated.delete(stream.streamID)
           if (this.dhVideoStreamId === stream.streamID) this.setVideoReady(false)
         }
       }
@@ -291,13 +293,14 @@ export class ZegoService {
   private updateVoiceState(): void {
     try {
       if (this.agentAudioStreamId && this.zg) {
-        // Only mute/unmute streams that are actually playing to avoid activation errors
-        if (this.isStreamPlaying(this.agentAudioStreamId)) {
-          try { (this.zg as any).mutePlayStreamAudio(this.agentAudioStreamId, !this.voiceEnabled) } catch {}
+        if (this.isStreamPlaying(this.agentAudioStreamId) && this.audioActivated.has(this.agentAudioStreamId)) {
+          Promise.resolve((this.zg as any).mutePlayStreamAudio(this.agentAudioStreamId, !this.voiceEnabled)).catch(() => {})
         }
       } else if (this.zg) {
         for (const sid of this.remoteViews.keys()) {
-          try { (this.zg as any).mutePlayStreamAudio(sid, !this.voiceEnabled) } catch {}
+          if (this.audioActivated.has(sid)) {
+            Promise.resolve((this.zg as any).mutePlayStreamAudio(sid, !this.voiceEnabled)).catch(() => {})
+          }
         }
       }
     } catch {}
