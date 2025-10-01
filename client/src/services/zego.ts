@@ -144,66 +144,51 @@ export class ZegoService {
           }
 
           try {
-            console.log('🔗 Playing digital human stream:', stream.streamID)
-            
+            console.log('🔗 Playing agent stream:', stream.streamID)
+
             const mediaStream = await this.zg!.startPlayingStream(stream.streamID)
             if (mediaStream) {
-              console.log('✅ Media stream received:', mediaStream)
-              
-              // Check if this is a video stream (has video tracks)
+              console.log('✅ Media stream received')
+
+              // Check if this is a video stream (digital human) or audio-only (regular agent)
               const videoTracks = mediaStream.getVideoTracks()
-              const audioTracks = mediaStream.getAudioTracks()
-              
-              if (videoTracks && videoTracks.length > 0 && this.videoElement) {
-                // This is a digital human video stream
-                console.log('📹 Setting up digital human video stream')
-                this.videoElement.srcObject = mediaStream
-                
-                try {
-                  await this.videoElement.play()
-                  console.log('✅ Digital human video playing successfully')
-                } catch (playError) {
-                  console.error('❌ Failed to play digital human video:', playError)
-                }
-              }
-              
-              if (audioTracks && audioTracks.length > 0 && this.audioElement) {
-                // Audio stream - could be from digital human or regular agent
-                console.log('🔊 Setting up audio stream')
-                
-                // Create a new audio element for this specific stream
-                const streamAudio = document.createElement('audio')
-                streamAudio.autoplay = true
-                streamAudio.srcObject = mediaStream
-                streamAudio.volume = 0.8
-                streamAudio.muted = false
-                
-                try {
-                  await streamAudio.play()
-                  console.log('✅ Audio stream playing successfully')
-                } catch (playError) {
-                  console.error('❌ Failed to play audio stream:', playError)
-                }
-              }
-              
-              // Fallback: use createRemoteStreamView for compatibility
+              const hasVideo = videoTracks && videoTracks.length > 0
+
               const remoteView = await this.zg!.createRemoteStreamView(mediaStream)
               if (remoteView) {
                 try {
-                  if (videoTracks && videoTracks.length > 0 && this.videoElement) {
-                    await remoteView.play(this.videoElement, { 
+                  if (hasVideo && this.videoElement) {
+                    // Digital human - play to video element
+                    await remoteView.play(this.videoElement, {
                       enableAutoplayDialog: false,
                       muted: false
                     })
+                    console.log('✅ Digital human video connected')
                   } else if (this.audioElement) {
-                    await remoteView.play(this.audioElement, { 
+                    // Regular agent - play to audio element
+                    await remoteView.play(this.audioElement, {
                       enableAutoplayDialog: false,
                       muted: false
                     })
+                    console.log('✅ Agent audio connected')
                   }
-                  console.log('✅ Digital human stream connected via remoteView')
                 } catch (playError) {
                   console.error('❌ Failed to play via remoteView:', playError)
+
+                  // Fallback: direct srcObject assignment
+                  try {
+                    if (hasVideo && this.videoElement) {
+                      this.videoElement.srcObject = mediaStream
+                      await this.videoElement.play()
+                      console.log('✅ Fallback: Digital human video playing')
+                    } else if (this.audioElement) {
+                      this.audioElement.srcObject = mediaStream
+                      await this.audioElement.play()
+                      console.log('✅ Fallback: Audio playing')
+                    }
+                  } catch (fallbackError) {
+                    console.error('❌ Fallback play failed:', fallbackError)
+                  }
                 }
               }
             }

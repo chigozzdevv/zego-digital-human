@@ -29,17 +29,17 @@ const baseAgentConfig = {
     ApiKey: CONFIG.DASHSCOPE_API_KEY || 'zego_test',
     Model: 'qwen-plus',
     SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
-    Temperature: 0.8,
+    Temperature: 0.7,
     TopP: 0.9,
     Params: {
-      max_tokens: 150
+      max_tokens: 400
     }
   },
   TTS: {
     Vendor: 'CosyVoice',
     Params: {
       app: {
-        api_key: CONFIG.DASHSCOPE_API_KEY || 'zego_test'
+        api_key: 'zego_test'
       },
       payload: {
         model: 'cosyvoice-v2',
@@ -108,46 +108,6 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
   }
 }
 
-// Utility helpers that keep RTC identifiers within ZEGO limits
-function createRtcSuffix(seed: string, length: number): string {
-  if (length <= 0) return '';
-
-  const sanitizedSeed = seed.replace(/[^A-Za-z0-9_-]/g, '');
-  const hash = crypto.createHash('md5').update(seed).digest('hex');
-
-  if (!sanitizedSeed) {
-    return hash.slice(0, Math.min(length, hash.length));
-  }
-
-  if (sanitizedSeed.length <= length) {
-    return sanitizedSeed;
-  }
-
-  const hashLength = Math.min(6, Math.max(length - 1, 1));
-  const trimmedSeed = sanitizedSeed.slice(0, Math.max(length - hashLength, 0));
-  const suffix = `${trimmedSeed}${hash.slice(0, hashLength)}`;
-  return suffix.slice(0, length);
-}
-
-function createRtcIdentifier(prefix: string, seed: string, maxLength: number): string {
-  const normalizedPrefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
-  const availableLength = maxLength - normalizedPrefix.length;
-  if (availableLength <= 0) {
-    return normalizedPrefix.slice(0, maxLength);
-  }
-
-  const suffix = createRtcSuffix(seed, availableLength);
-  return `${normalizedPrefix}${suffix}`;
-}
-
-function createRtcUserId(prefix: string, roomId: string, maxLength = 32): string {
-  return createRtcIdentifier(prefix, roomId, maxLength);
-}
-
-function createRtcStreamId(prefix: string, roomId: string, maxLength = 32): string {
-  return createRtcIdentifier(prefix, roomId, maxLength);
-}
-
 async function registerAgent(): Promise<string> {
   if (REGISTERED_AGENT_ID) return REGISTERED_AGENT_ID
   
@@ -179,10 +139,10 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     }
     
     const agentId = await registerAgent()
-    
+
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentUserId = createRtcUserId('agent', room_id)
-    const agentStreamId = createRtcStreamId('agent_stream', room_id)
+    const agentUserId = `agent_${room_id}`
+    const agentStreamId = `agent_stream_${room_id}`
     
     const instanceConfig = {
       AgentId: agentId,
@@ -248,9 +208,8 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const agentId = await registerAgent()
     
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentSuffix = createRtcSuffix(room_id, 13)
-    const agentUserId = `interviewer_${agentSuffix}`
-    const agentStreamId = `interviewer_stream_${agentSuffix}`
+    const agentUserId = `agent_${room_id}`
+    const agentStreamId = `agent_stream_${room_id}`
 
     console.log('Digital human identifiers:', {
       agentUserId,
@@ -264,17 +223,20 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const digitalHumanConfig = {
       AgentId: agentId,
       UserId: user_id,
-      ...baseAgentConfig,
       RTC: {
         RoomId: room_id,
         AgentUserId: agentUserId,
         AgentStreamId: agentStreamId,
         UserStreamId: userStreamId
       },
+      DigitalHuman: {
+        DigitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
+        ConfigId: config_id || 'web'
+      },
       MessageHistory: {
         SyncMode: 1,
         Messages: [],
-        WindowSize: 6
+        WindowSize: 10
       },
       CallbackConfig: {
         ASRResult: 1,
@@ -283,13 +245,6 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         Interrupted: 1,
         UserSpeakAction: 1,
         AgentSpeakAction: 1
-      },
-      AdvancedConfig: {
-        InterruptMode: 0
-      },
-      DigitalHuman: {
-        DigitalHumanId: digital_human_id,
-        ConfigId: config_id
       }
     }
 
