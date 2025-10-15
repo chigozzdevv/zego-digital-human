@@ -300,32 +300,78 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     }
 
     // Step 2: Create digital human video stream (separate from agent)
+    // Use valid standard resolution to avoid product limit issues
     const digitalHumanConfig = {
       DigitalHumanConfig: {
         DigitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
         Layout: {
           Top: 0,
           Left: 0,
-          Width: 1080,
-          Height: 1920,
+          Width: 1280,  // Standard resolution
+          Height: 720,   // Standard resolution
           Layer: 2
-        },
-        BackgroundColor: "#00000000" // Transparent background
+        }
       },
       RTCConfig: {
         RoomId: room_id,
         StreamId: `${agentStreamId}_video` // Separate stream for video
       },
       VideoConfig: {
-        Width: 1080,
-        Height: 1920,
-        Bitrate: 3000000
+        Width: 1280,   // Standard resolution (1280 × 720 = 921,600 < 2,073,600)
+        Height: 720,    // Standard resolution
+        Bitrate: 2000000 // Standard bitrate
       },
-      Assets: [] // No additional assets for now
+      Assets: [
+        {
+          AssetType: 1, // Image type
+          AssetUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", // Transparent 1x1 PNG
+          Layout: {
+            Top: 0,
+            Left: 0,
+            Width: 1280,
+            Height: 720,
+            Layer: 1
+          }
+        }
+      ]
     }
 
     console.log('🎭 Creating Digital Human video stream...')
     console.log('Digital Human AI Config:', JSON.stringify(digitalHumanConfig, null, 2))
+    
+    // Debug: Validate all parameters before sending
+    const validationErrors = []
+    
+    if (!digitalHumanConfig.DigitalHumanConfig?.DigitalHumanId) {
+      validationErrors.push('Missing DigitalHumanId')
+    }
+    
+    if (!digitalHumanConfig.RTCConfig?.RoomId || digitalHumanConfig.RTCConfig.RoomId.length > 128) {
+      validationErrors.push('Invalid RoomId')
+    }
+    
+    if (!digitalHumanConfig.RTCConfig?.StreamId || digitalHumanConfig.RTCConfig.StreamId.length > 128) {
+      validationErrors.push('Invalid StreamId')
+    }
+    
+    if (!digitalHumanConfig.Assets || !Array.isArray(digitalHumanConfig.Assets) || digitalHumanConfig.Assets.length === 0) {
+      validationErrors.push('Assets array is empty or invalid')
+    }
+    
+    const videoProduct = digitalHumanConfig.VideoConfig.Width * digitalHumanConfig.VideoConfig.Height
+    const maxProduct = 1920 * 1080
+    if (videoProduct > maxProduct) {
+      validationErrors.push(`Video resolution too large: ${videoProduct} > ${maxProduct}`)
+    }
+    
+    if (validationErrors.length > 0) {
+      console.error('❌ Digital Human Config Validation Errors:', validationErrors)
+      res.status(400).json({
+        error: 'Invalid digital human configuration',
+        details: validationErrors
+      })
+      return
+    }
 
     const digitalHumanResult = await makeZegoRequest('CreateDigitalHumanStreamTask', digitalHumanConfig, 'digitalhuman')
 
