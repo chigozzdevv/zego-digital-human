@@ -363,24 +363,37 @@ app.post('/api/send-message', async (req: Request, res: Response): Promise<void>
 
 app.get('/api/token', (req: Request, res: Response): void => {
   try {
-    const userId = req.query.user_id as string
-    const roomId = req.query.room_id as string
+    const userId = (req.query.user_id as string) || ''
+    const roomId = (req.query.room_id as string) || ''
 
     if (!userId) {
       res.status(400).json({ error: 'user_id required' })
       return
     }
 
+    // Validate env before attempt
+    const appIdStr = CONFIG.ZEGO_APP_ID
+    const secret = CONFIG.ZEGO_SERVER_SECRET
+    const appId = Number(appIdStr)
+    if (!appIdStr || Number.isNaN(appId)) {
+      res.status(500).json({ error: 'ZEGO_APP_ID missing or invalid. Check server/.env' })
+      return
+    }
+    if (!secret || secret.length !== 32) {
+      res.status(500).json({ error: 'ZEGO_SERVER_SECRET missing or not 32 chars. Check server/.env' })
+      return
+    }
+
     const payload = {
-      room_id: roomId || '',
+      room_id: roomId,
       privilege: { 1: 1, 2: 1 },
       stream_id_list: null
     }
 
     const token = generateToken04(
-      parseInt(CONFIG.ZEGO_APP_ID, 10),
+      appId,
       userId,
-      CONFIG.ZEGO_SERVER_SECRET,
+      secret,
       3600,
       JSON.stringify(payload)
     )
@@ -389,7 +402,8 @@ app.get('/api/token', (req: Request, res: Response): void => {
 
   } catch (error: any) {
     console.error('Token error:', error)
-    res.status(500).json({ error: 'Failed to generate token' })
+    const message = typeof error?.errorMessage === 'string' ? error.errorMessage : (error?.message || 'Failed to generate token')
+    res.status(500).json({ error: message })
   }
 })
 
