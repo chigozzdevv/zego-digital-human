@@ -1,6 +1,10 @@
 import { ZegoExpressEngine } from 'zego-express-engine-webrtc'
+import { VoiceChanger } from 'zego-express-engine-webrtc/voice-changer'
 import { config } from '../config'
 import { digitalHumanAPI } from './digitalHumanAPI'
+
+// Note: VoiceChanger module will be loaded when available
+// For now, traditional 3A audio processing is enabled by default in the SDK
 
 export class ZegoService {
   private static instance: ZegoService
@@ -25,15 +29,41 @@ export class ZegoService {
 
     this.isJoining = true
     try {
+      // Load audio processing module before engine creation
+      try {
+        ZegoExpressEngine.use(VoiceChanger)
+      } catch (e) {
+        console.warn('VoiceChanger module not available or failed to load:', e)
+      }
+
+      // Initialize with High Quality Chatroom scenario for optimal AI voice interaction
+      // Scenario 7 enables optimizations for voice call quality and latency
       this.zg = new ZegoExpressEngine(
-        parseInt(config.ZEGO_APP_ID), 
-        config.ZEGO_SERVER
+        parseInt(config.ZEGO_APP_ID),
+        config.ZEGO_SERVER,
+        {
+          scenario: 7  // High Quality Chatroom - optimized for AI Agent voice calls
+        }
       )
-      
+
+      // Basic system checks
+      try {
+        const rtcSup = await this.zg.checkSystemRequirements('webRTC')
+        if (!rtcSup?.result) {
+          throw new Error('WebRTC not supported in this browser')
+        }
+        const micSup = await this.zg.checkSystemRequirements('microphone')
+        if (!micSup?.result) {
+          console.warn('Microphone permission not granted yet')
+        }
+      } catch (checkErr) {
+        console.warn('System requirement check warning:', checkErr)
+      }
+
       this.setupEventListeners()
       this.setupMediaElements()
       this.isInitialized = true
-      console.log('✅ ZEGO initialized successfully with digital human support')
+      console.log('✅ ZEGO initialized successfully with AI audio processing & digital human support')
     } catch (error) {
       console.error('❌ ZEGO initialization failed:', error)
       throw error
@@ -66,7 +96,7 @@ export class ZegoService {
       this.videoElement.style.width = '100%'
       this.videoElement.style.height = '100%'
       this.videoElement.style.objectFit = 'cover'
-      
+
       // Find digital human container and append
       const container = document.querySelector('[data-digital-human-container]')
       if (container) {
@@ -133,11 +163,11 @@ export class ZegoService {
 
     this.zg.on('roomStreamUpdate', async (_roomID: string, updateType: string, streamList: any[]) => {
       console.log('📡 Stream update:', updateType, streamList.length, 'streams')
-      
+
       if (updateType === 'ADD' && streamList.length > 0) {
         for (const stream of streamList) {
           const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
-          
+
           if (userStreamId && stream.streamID === userStreamId) {
             console.log('🚫 Skipping user\'s own stream:', stream.streamID)
             continue
@@ -148,11 +178,24 @@ export class ZegoService {
 
             const mediaStream = await this.zg!.startPlayingStream(stream.streamID)
             if (mediaStream) {
-              console.log('✅ Media stream received')
-
-              // Check if this is a video stream (digital human) or audio-only (regular agent)
+              // Validate stream tracks
               const videoTracks = mediaStream.getVideoTracks()
-              const hasVideo = videoTracks && videoTracks.length > 0
+              const audioTracks = mediaStream.getAudioTracks()
+              const hasVideo = videoTracks?.length > 0
+              const hasAudio = audioTracks?.length > 0
+
+              console.log('📊 Stream info:', {
+                hasVideo,
+                hasAudio,
+                videoTrackCount: videoTracks?.length,
+                audioTrackCount: audioTracks?.length,
+                streamID: stream.streamID
+              })
+
+              if (!hasVideo && !hasAudio) {
+                console.error('❌ Stream has no tracks!')
+                return
+              }
 
               const remoteView = await this.zg!.createRemoteStreamView(mediaStream)
               if (remoteView) {
@@ -205,6 +248,13 @@ export class ZegoService {
           this.videoElement.srcObject = null
         }
       }
+    })
+
+    // SEI data listener for digital human lip-sync
+    // SEI (Supplemental Enhancement Information) provides timing data for precise lip synchronization
+    this.zg.on('playerRecvSEI', (streamID: string, seiData: Uint8Array) => {
+      console.log('📦 SEI data received for stream:', streamID, 'size:', seiData.length)
+      // SEI data will be passed to digital human SDK for lip-sync when integrated
     })
 
     this.zg.on('roomUserUpdate', (_roomID: string, updateType: string, userList: any[]) => {
@@ -268,14 +318,14 @@ export class ZegoService {
       })
 
       console.log('📢 Enabling room message reception')
-      this.zg.callExperimentalAPI({ 
-        method: 'onRecvRoomChannelMessage', 
-        params: {} 
+      this.zg.callExperimentalAPI({
+        method: 'onRecvRoomChannelMessage',
+        params: {}
       })
 
       console.log('🎤 Creating local stream for interview')
       const localStream = await this.zg.createZegoStream({
-        camera: { 
+        camera: {
           video: false,  // Audio only for candidate
           audio: true
         }
@@ -284,12 +334,12 @@ export class ZegoService {
       if (localStream) {
         this.localStream = localStream
         const streamId = `${userId}_stream`
-        
+
         console.log('📤 Publishing candidate stream:', streamId)
         await this.zg.startPublishingStream(streamId, localStream, {
           enableAutoSwitchVideoCodec: true
         })
-        
+
         console.log('✅ Interview room joined successfully')
         return true
       } else {
@@ -318,7 +368,7 @@ export class ZegoService {
           return true
         }
       }
-      
+
       console.warn('⚠️ No audio track found in local stream')
       return false
     } catch (error) {
@@ -335,21 +385,21 @@ export class ZegoService {
 
     try {
       console.log('🚪 Leaving interview room:', this.currentRoomId)
-      
+
       if (this.currentUserId && this.localStream) {
         const streamId = `${this.currentUserId}_stream`
         console.log('📤 Stopping stream publication:', streamId)
         await this.zg.stopPublishingStream(streamId)
       }
-      
+
       if (this.localStream) {
         console.log('🗑️ Destroying local stream')
         this.zg.destroyStream(this.localStream)
         this.localStream = null
       }
-      
+
       await this.zg.logoutRoom()
-      
+
       // Clean up media elements
       if (this.audioElement) {
         this.audioElement.srcObject = null
@@ -357,10 +407,10 @@ export class ZegoService {
       if (this.videoElement) {
         this.videoElement.srcObject = null
       }
-      
+
       this.currentRoomId = null
       this.currentUserId = null
-      
+
       console.log('✅ Left interview room successfully')
     } catch (error) {
       console.error('❌ Failed to leave interview room:', error)
@@ -404,17 +454,17 @@ export class ZegoService {
       this.leaveRoom()
       this.zg = null
       this.isInitialized = false
-      
+
       if (this.audioElement && this.audioElement.parentNode) {
         this.audioElement.parentNode.removeChild(this.audioElement)
         this.audioElement = null
       }
-      
+
       if (this.videoElement && this.videoElement.parentNode) {
         this.videoElement.parentNode.removeChild(this.videoElement)
         this.videoElement = null
       }
-      
+
       console.log('🗑️ ZEGO service destroyed')
     }
   }

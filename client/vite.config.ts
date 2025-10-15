@@ -11,6 +11,6 @@ export default defineConfig({
     host: true,
   },
   optimizeDeps: {
-    include: ['zego-express-engine-webrtc'],
+    include: ['zego-express-engine-webrtc', 'zego-express-engine-webrtc/voice-changer'],
   }
 })

@@ -4,6 +4,7 @@ import axios from 'axios'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { createRequire } from 'module'
+
 const require = createRequire(import.meta.url)
 const { generateToken04 } = require('../zego-token.cjs')
 
@@ -25,9 +26,9 @@ let REGISTERED_AGENT_ID: string | null = null
 
 const baseAgentConfig = {
   LLM: {
-    Url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
-    ApiKey: CONFIG.DASHSCOPE_API_KEY || 'zego_test',
-    Model: 'qwen-plus',
+    Url: 'https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions',
+    ApiKey: 'zego_test',
+    Model: 'doubao-1-5-lite-32k-250115',
     SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
     Temperature: 0.7,
     TopP: 0.9,
@@ -46,7 +47,8 @@ const baseAgentConfig = {
         parameters: {
           voice: 'longxiaochun_v2',
           speed: 1.0,
-          volume: 0.8
+          volume: 0.8,
+          pitch: 0.0
         }
       }
     },
@@ -59,7 +61,8 @@ const baseAgentConfig = {
         BeginCharacters: '[',
         EndCharacters: ']'
       }
-    ]
+    ],
+    TerminatorText: '#'
   },
   ASR: {
     HotWord: 'interview|10,experience|8,project|8,team|8,challenge|8,skills|8',
@@ -71,13 +74,13 @@ const baseAgentConfig = {
 function generateZegoSignature(action: string) {
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = crypto.randomBytes(8).toString('hex')
-  
+
   const appId = CONFIG.ZEGO_APP_ID
   const serverSecret = CONFIG.ZEGO_SERVER_SECRET
-  
+
   const signString = appId + nonce + serverSecret + timestamp
   const signature = crypto.createHash('md5').update(signString).digest('hex')
-  
+
   return {
     Action: action,
     AppId: appId,
@@ -93,9 +96,9 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
   const queryString = Object.entries(queryParams)
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
     .join('&')
-  
+
   const url = `${CONFIG.ZEGO_API_BASE_URL}?${queryString}`
-  
+
   try {
     const response = await axios.post(url, body, {
       headers: { 'Content-Type': 'application/json' },
@@ -110,19 +113,19 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
 
 async function registerAgent(): Promise<string> {
   if (REGISTERED_AGENT_ID) return REGISTERED_AGENT_ID
-  
+
   const agentId = `interview_agent_${Date.now()}`
   const agentConfig = {
     AgentId: agentId,
     Name: 'AI Interview Assistant',
     ...baseAgentConfig
   }
-  
+
   const result = await makeZegoRequest('RegisterAgent', agentConfig)
   if (result.Code !== 0) {
     throw new Error(`RegisterAgent failed: ${result.Code} ${result.Message}`)
   }
-  
+
   REGISTERED_AGENT_ID = agentId
   console.log('Interview agent registered:', agentId)
   return agentId
@@ -132,18 +135,18 @@ async function registerAgent(): Promise<string> {
 app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id, user_id, user_stream_id } = req.body
-    
+
     if (!room_id || !user_id) {
       res.status(400).json({ error: 'room_id and user_id required' })
       return
     }
-    
+
     const agentId = await registerAgent()
 
     const userStreamId = user_stream_id || `${user_id}_stream`
     const agentUserId = `agent_${room_id}`
     const agentStreamId = `agent_stream_${room_id}`
-    
+
     const instanceConfig = {
       AgentId: agentId,
       UserId: user_id,
@@ -157,7 +160,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
       MessageHistory: {
         SyncMode: 1,
         Messages: [],
-        WindowSize: 8
+        WindowSize: 50
       },
       CallbackConfig: {
         ASRResult: 1,
@@ -171,14 +174,14 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
         InterruptMode: 0
       }
     }
-    
+
     const result = await makeZegoRequest('CreateAgentInstance', instanceConfig)
-    
+
     if (result.Code !== 0) {
       res.status(400).json({ error: result.Message || 'Failed to create instance' })
       return
     }
-    
+
     res.json({
       success: true,
       agentInstanceId: result.Data?.AgentInstanceId,
@@ -186,7 +189,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
       agentStreamId: agentStreamId,
       userStreamId: userStreamId
     })
-    
+
   } catch (error: any) {
     console.error('Start error:', error)
     res.status(500).json({ error: error.message || 'Internal error' })
@@ -204,9 +207,9 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       res.status(400).json({ error: 'room_id and user_id required' })
       return
     }
-    
+
     const agentId = await registerAgent()
-    
+
     const userStreamId = user_stream_id || `${user_id}_stream`
     const agentUserId = `agent_${room_id}`
     const agentStreamId = `agent_stream_${room_id}`
@@ -219,7 +222,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       userStreamId,
       userStreamIdLength: userStreamId.length
     })
-    
+
     const digitalHumanConfig = {
       AgentId: agentId,
       UserId: user_id,
@@ -236,7 +239,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       MessageHistory: {
         SyncMode: 1,
         Messages: [],
-        WindowSize: 10
+        WindowSize: 50
       },
       CallbackConfig: {
         ASRResult: 1,
@@ -245,11 +248,14 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         Interrupted: 1,
         UserSpeakAction: 1,
         AgentSpeakAction: 1
+      },
+      AdvancedConfig: {
+        InterruptMode: 0
       }
     }
 
     console.log('Full digitalHumanConfig:', JSON.stringify(digitalHumanConfig, null, 2))
-    
+
     const result = await makeZegoRequest('CreateDigitalHumanAgentInstance', digitalHumanConfig)
 
     if (result.Code !== 0) {
@@ -265,9 +271,9 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       })
       return
     }
-    
+
     console.log('Digital human interview started successfully:', result.Data?.AgentInstanceId)
-    
+
     res.json({
       success: true,
       agentInstanceId: result.Data?.AgentInstanceId,
@@ -276,7 +282,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       userStreamId: userStreamId,
       digitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97'
     })
-    
+
   } catch (error: any) {
     console.error('Start digital human interview error:', error)
     res.status(500).json({ error: error.message || 'Internal error' })
@@ -286,23 +292,40 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
 app.post('/api/stop', async (req: Request, res: Response): Promise<void> => {
   try {
     const { agent_instance_id } = req.body
-    
+
     if (!agent_instance_id) {
       res.status(400).json({ error: 'agent_instance_id required' })
       return
     }
-    
+
+    // Get latency metrics before deletion
+    try {
+      const status = await makeZegoRequest('QueryAgentInstanceStatus', {
+        AgentInstanceId: agent_instance_id
+      })
+
+      console.log('📊 Session Performance Metrics:', {
+        agentInstanceId: agent_instance_id,
+        llmFirstTokenLatency: status.Data?.LLMFirstTokenLatency + 'ms',
+        llmOutputSpeed: status.Data?.LLMOutputSpeed + ' tokens/sec',
+        ttsFirstAudioLatency: status.Data?.TTSFirstAudioLatency + 'ms',
+        totalServerLatency: status.Data?.TotalServerLatency + 'ms'
+      })
+    } catch (statusError) {
+      console.warn('⚠️ Could not fetch performance metrics:', statusError)
+    }
+
     const result = await makeZegoRequest('DeleteAgentInstance', {
       AgentInstanceId: agent_instance_id
     })
-    
+
     if (result.Code !== 0) {
       res.status(400).json({ error: result.Message || 'Failed to delete instance' })
       return
     }
-    
+
     res.json({ success: true })
-    
+
   } catch (error: any) {
     console.error('Stop error:', error)
     res.status(500).json({ error: error.message || 'Internal error' })
@@ -312,26 +335,26 @@ app.post('/api/stop', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/send-message', async (req: Request, res: Response): Promise<void> => {
   try {
     const { agent_instance_id, message } = req.body
-    
+
     if (!agent_instance_id || !message) {
       res.status(400).json({ error: 'agent_instance_id and message required' })
       return
     }
-    
+
     const result = await makeZegoRequest('SendAgentInstanceLLM', {
       AgentInstanceId: agent_instance_id,
       Text: message,
       AddQuestionToHistory: false,
       AddAnswerToHistory: true
     })
-    
+
     if (result.Code !== 0) {
       res.status(400).json({ error: result.Message || 'Failed to send message' })
       return
     }
-    
+
     res.json({ success: true })
-    
+
   } catch (error: any) {
     console.error('Send message error:', error)
     res.status(500).json({ error: error.message || 'Internal error' })
@@ -342,18 +365,18 @@ app.get('/api/token', (req: Request, res: Response): void => {
   try {
     const userId = req.query.user_id as string
     const roomId = req.query.room_id as string
-    
+
     if (!userId) {
       res.status(400).json({ error: 'user_id required' })
       return
     }
-    
+
     const payload = {
       room_id: roomId || '',
       privilege: { 1: 1, 2: 1 },
       stream_id_list: null
     }
-    
+
     const token = generateToken04(
       parseInt(CONFIG.ZEGO_APP_ID, 10),
       userId,
@@ -361,9 +384,9 @@ app.get('/api/token', (req: Request, res: Response): void => {
       3600,
       JSON.stringify(payload)
     )
-    
+
     res.json({ token })
-    
+
   } catch (error: any) {
     console.error('Token error:', error)
     res.status(500).json({ error: 'Failed to generate token' })
@@ -379,13 +402,57 @@ app.get('/api/interview/questions', (_req: Request, res: Response): void => {
     "Where do you see yourself professionally in the next few years, and how does this role align with your career goals?",
     "Do you have any questions about the role, our company, or anything else you'd like to know? Thank you for your time today!"
   ]
-  
+
   res.json({ questions })
 })
 
 app.post('/api/callbacks', (req: Request, res: Response): void => {
-  console.log('Interview callback received:', req.body.Event)
-  // Handle interview-specific callbacks here
+  const { Event, Data, AgentInstanceId, RoomId, Timestamp } = req.body
+
+  console.log(`📞 [${new Date(Timestamp || Date.now()).toISOString()}] ZEGO Callback:`, {
+    Event,
+    AgentInstanceId: AgentInstanceId?.substring(0, 20) + '...',
+    RoomId
+  })
+
+  switch (Event) {
+    case 'Exception':
+      console.error('❌ Agent Exception:', {
+        Code: Data.Code,
+        Message: Data.Message,
+        AgentInstanceId,
+        RoomId
+      })
+      break
+
+    case 'AgentSpeakAction':
+      console.log('🗣️ Agent speaking:', Data.Action === 'SPEAK_BEGIN' ? 'Started' : 'Ended')
+      break
+
+    case 'UserSpeakAction':
+      console.log('🎤 User speaking:', Data.Action === 'SPEAK_BEGIN' ? 'Started' : 'Ended')
+      break
+
+    case 'Interrupted':
+      console.log('✋ Agent interrupted by user')
+      break
+
+    case 'ASRResult':
+      if (Data.EndFlag) {
+        console.log('🎯 ASR Final:', Data.Text?.substring(0, 50) + '...')
+      }
+      break
+
+    case 'LLMResult':
+      if (Data.EndFlag) {
+        console.log('🤖 LLM Complete:', Data.Text?.substring(0, 50) + '...')
+      }
+      break
+
+    default:
+      console.log('📨 Other callback:', Event)
+  }
+
   res.status(200).json({ success: true })
 })
 
@@ -418,13 +485,3 @@ app.listen(CONFIG.PORT, () => {
   console.log(`🤖 Digital Human support: enabled`)
   console.log(`🔊 Voice interaction: enabled`)
 })
-
-
-
-
-
-
-
-
-
-

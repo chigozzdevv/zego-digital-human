@@ -131,6 +131,8 @@ export const useInterview = () => {
   const messageHandlerSetup = useRef(false)
   const cleanupFunctions = useRef<(() => void)[]>([])
   const streamingMessages = useRef(new Map<string, string>())
+  const asrSeqMap = useRef(new Map<string, number>()) // MessageId -> last SeqId (ASR only)
+  const llmBuffers = useRef(new Map<string, Map<number, string>>()) // MessageId -> (SeqId -> chunk)
   const questionTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
 
   const defaultVoiceSettings: VoiceSettings = {
@@ -193,13 +195,22 @@ export const useInterview = () => {
 
     const handleRoomMessage = (data: any) => {
       try {
-        const { Cmd, Data: msgData } = data
+        const { Cmd, Data: msgData, SeqId } = data
         
         if (Cmd === 3) {
           // ASR results - user speech
           const { Text: transcript, EndFlag, MessageId } = msgData
           
           if (transcript && transcript.trim()) {
+            // Keep only the latest by SeqId per MessageId
+            const mid = MessageId || 'asr_default'
+            const last = asrSeqMap.current.get(mid) ?? -1
+            if (typeof SeqId === 'number' && SeqId < last) {
+              return
+            }
+            if (typeof SeqId === 'number') asrSeqMap.current.set(mid, SeqId)
+
+            // ASR is full text per message; replace current transcript
             dispatch({ type: 'SET_TRANSCRIPT', payload: transcript })
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
             
@@ -223,6 +234,8 @@ export const useInterview = () => {
               setTimeout(() => {
                 askNextQuestion()
               }, 3000)
+              // Clear ASR tracker for this round
+              asrSeqMap.current.delete(mid)
             }
           }
         } else if (Cmd === 4) {
@@ -230,44 +243,61 @@ export const useInterview = () => {
           const { Text: content, MessageId, EndFlag } = msgData
           if (!content || !MessageId) return
 
+          // Build ordered buffer by SeqId per MessageId
+          const seqId = typeof SeqId === 'number' ? SeqId : 0
+          if (!llmBuffers.current.has(MessageId)) {
+            llmBuffers.current.set(MessageId, new Map<number, string>())
+          }
+          llmBuffers.current.get(MessageId)!.set(seqId, content)
+
+          // Reconstruct in order
+          const ordered = Array.from(llmBuffers.current.get(MessageId)!.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([, chunk]) => chunk)
+            .join('')
+
           if (EndFlag) {
-            const currentStreaming = streamingMessages.current.get(MessageId) || ''
-            const finalContent = currentStreaming + content
-            
-            dispatch({ type: 'UPDATE_MESSAGE', payload: {
-              id: MessageId,
-              updates: { 
-                content: finalContent, 
-                isStreaming: false 
+            // Finalize message content
+            if (!processedMessageIds.current.has(MessageId)) {
+              // If we somehow never added it, add final
+              const finalMsg: Message = {
+                id: MessageId,
+                content: ordered,
+                sender: 'ai',
+                timestamp: Date.now(),
+                type: 'text',
+                isStreaming: false
               }
-            }})
-            
+              processedMessageIds.current.add(MessageId)
+              dispatch({ type: 'ADD_MESSAGE', payload: finalMsg })
+            } else {
+              dispatch({ type: 'UPDATE_MESSAGE', payload: {
+                id: MessageId,
+                updates: { content: ordered, isStreaming: false }
+              }})
+            }
+            llmBuffers.current.delete(MessageId)
             streamingMessages.current.delete(MessageId)
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
           } else {
-            const currentStreaming = streamingMessages.current.get(MessageId) || ''
-            const updatedContent = currentStreaming + content
-            streamingMessages.current.set(MessageId, updatedContent)
-            
+            // Streaming update
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
                 id: MessageId,
-                content: updatedContent,
+                content: ordered,
                 sender: 'ai',
                 timestamp: Date.now(),
                 type: 'text',
                 isStreaming: true
               }
-              
               processedMessageIds.current.add(MessageId)
               dispatch({ type: 'ADD_MESSAGE', payload: streamingMessage })
             } else {
               dispatch({ type: 'UPDATE_MESSAGE', payload: {
                 id: MessageId,
-                updates: { content: updatedContent, isStreaming: true }
+                updates: { content: ordered, isStreaming: true }
               }})
             }
-            
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
           }
         }
@@ -352,8 +382,9 @@ export const useInterview = () => {
       
       addMessageSafely(userMessage)
       dispatch({ type: 'SET_AGENT_STATUS', payload: 'thinking' })
-      
-      // Wait a bit then ask next question (simulating processing)
+      // Send text to agent (LLM trigger)
+      await digitalHumanAPI.sendMessage(state.session.agentInstanceId, trimmedContent)
+      // Optionally schedule next scripted question slightly later
       setTimeout(() => {
         askNextQuestion()
       }, 2000)
