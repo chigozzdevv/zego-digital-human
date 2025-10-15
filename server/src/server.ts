@@ -26,9 +26,9 @@ let REGISTERED_AGENT_ID: string | null = null
 
 const baseAgentConfig = {
   LLM: {
-    Url: 'https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions',
+    Url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
     ApiKey: 'zego_test',
-    Model: 'doubao-1-5-lite-32k-250115',
+    Model: 'qwen-plus',
     SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
     Temperature: 0.7,
     TopP: 0.9,
