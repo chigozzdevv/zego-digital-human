@@ -2,8 +2,8 @@ import axios from 'axios'
 import { config } from '../config'
 
 const api = axios.create({
-  // In dev, use same-origin + Vite proxy to avoid CORS
-  baseURL: import.meta.env.DEV ? '/' : config.API_BASE_URL,
+  // Always use configured API base URL so dev can target Render or local
+  baseURL: config.API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'

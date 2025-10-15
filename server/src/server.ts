@@ -4,7 +4,6 @@ import axios from 'axios'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { createRequire } from 'module'
-
 const require = createRequire(import.meta.url)
 const { generateToken04 } = require('../zego-token.cjs')
 
@@ -363,8 +362,8 @@ app.post('/api/send-message', async (req: Request, res: Response): Promise<void>
 
 app.get('/api/token', (req: Request, res: Response): void => {
   try {
-    const userId = (req.query.user_id as string) || ''
-    const roomId = (req.query.room_id as string) || ''
+    const userId = ((req.query.user_id as string) || '').trim()
+    const roomId = ((req.query.room_id as string) || '').trim()
 
     if (!userId) {
       res.status(400).json({ error: 'user_id required' })
@@ -372,15 +371,15 @@ app.get('/api/token', (req: Request, res: Response): void => {
     }
 
     // Validate env before attempt
-    const appIdStr = CONFIG.ZEGO_APP_ID
-    const secret = CONFIG.ZEGO_SERVER_SECRET
+    const appIdStr = (CONFIG.ZEGO_APP_ID || '').toString().trim()
+    const secret = (CONFIG.ZEGO_SERVER_SECRET || '').toString().trim()
     const appId = Number(appIdStr)
     if (!appIdStr || Number.isNaN(appId)) {
       res.status(500).json({ error: 'ZEGO_APP_ID missing or invalid. Check server/.env' })
       return
     }
     if (!secret || secret.length !== 32) {
-      res.status(500).json({ error: 'ZEGO_SERVER_SECRET missing or not 32 chars. Check server/.env' })
+      res.status(500).json({ error: `ZEGO_SERVER_SECRET missing or not 32 chars (got ${secret?.length || 0}). Check server/.env` })
       return
     }
 
@@ -403,7 +402,11 @@ app.get('/api/token', (req: Request, res: Response): void => {
   } catch (error: any) {
     console.error('Token error:', error)
     const message = typeof error?.errorMessage === 'string' ? error.errorMessage : (error?.message || 'Failed to generate token')
-    res.status(500).json({ error: message })
+    try {
+      res.status(500).json({ error: message })
+    } catch {
+      // Avoid express double-send edge cases
+    }
   }
 })
 
