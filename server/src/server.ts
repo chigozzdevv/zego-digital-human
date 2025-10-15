@@ -16,7 +16,8 @@ app.use(cors())
 const CONFIG = {
   ZEGO_APP_ID: process.env.ZEGO_APP_ID!,
   ZEGO_SERVER_SECRET: process.env.ZEGO_SERVER_SECRET!,
-  ZEGO_API_BASE_URL: 'https://aigc-aiagent-api.zegotech.cn/',
+  ZEGO_AIAGENT_API_BASE_URL: 'https://aigc-aiagent-api.zegotech.cn',
+  ZEGO_DIGITAL_HUMAN_API_BASE_URL: 'https://aigc-digitalhuman-api.zegotech.cn',
   DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY,
   PORT: parseInt(process.env.PORT || '8080', 10)
 }
@@ -121,13 +122,17 @@ function generateZegoSignature(action: string) {
   }
 }
 
-async function makeZegoRequest(action: string, body: object = {}): Promise<any> {
+async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiagent' | 'digitalhuman' = 'aiagent'): Promise<any> {
   const queryParams = generateZegoSignature(action)
   const queryString = Object.entries(queryParams)
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
     .join('&')
 
-  const url = `${CONFIG.ZEGO_API_BASE_URL}?${queryString}`
+  const baseUrl = apiType === 'digitalhuman' 
+    ? CONFIG.ZEGO_DIGITAL_HUMAN_API_BASE_URL 
+    : CONFIG.ZEGO_AIAGENT_API_BASE_URL
+
+  const url = `${baseUrl}?${queryString}`
 
   try {
     const response = await axios.post(url, body, {
@@ -136,7 +141,7 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
     })
     return response.data
   } catch (error: any) {
-    logAxiosError('ZEGO API HTTP Error', error, { action })
+    logAxiosError('ZEGO API HTTP Error', error, { action, apiType })
     throw error
   }
 }
@@ -229,16 +234,14 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 
 app.post('/api/start-digital-human', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { room_id, user_id, user_stream_id, digital_human_id, config_id } = req.body
+    const { room_id, user_id, user_stream_id, digital_human_id } = req.body
 
-    console.log('Digital human request params:', { room_id, user_id, user_stream_id, digital_human_id, config_id })
+    console.log('Digital human request params:', { room_id, user_id, user_stream_id, digital_human_id })
 
     if (!room_id || !user_id) {
       res.status(400).json({ error: 'room_id and user_id required' })
       return
     }
-
-    const agentId = await registerAgent()
 
     const userStreamId = user_stream_id || `${user_id}_stream`
     const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
@@ -252,20 +255,18 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       userStreamIdLength: userStreamId.length
     })
 
-    const digitalHumanConfig = {
+    // Step 1: Create regular AI agent for LLM/TTS interview functionality
+    const agentId = await registerAgent()
+
+    const instanceConfig = {
       AgentId: agentId,
       UserId: user_id,
-      // Include LLM/TTS/ASR so server has full config at instance level
-      ...baseAgentConfig,
+      ...baseAgentConfig, // LLM, TTS, ASR configurations
       RTC: {
         RoomId: room_id,
         AgentUserId: agentUserId,
         AgentStreamId: agentStreamId,
         UserStreamId: userStreamId
-      },
-      DigitalHuman: {
-        DigitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
-        ConfigId: config_id || 'web'
       },
       MessageHistory: {
         SyncMode: 1,
@@ -285,33 +286,85 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       }
     }
 
-    console.log('Full digitalHumanConfig:', JSON.stringify(digitalHumanConfig, null, 2))
+    console.log('🤖 Creating AI Agent for interview functionality...')
+    const agentResult = await makeZegoRequest('CreateAgentInstance', instanceConfig, 'aiagent')
 
-    const result = await makeZegoRequest('CreateDigitalHumanAgentInstance', digitalHumanConfig)
-
-    if (result.Code !== 0) {
-      console.error('ZEGO CreateDigitalHumanAgentInstance failed with payload:', JSON.stringify(result, null, 2))
+    if (agentResult.Code !== 0) {
+      console.error('ZEGO CreateAgentInstance failed:', agentResult)
       res.status(400).json({
-        error: result.Message || 'Failed to create digital human instance',
-        code: result.Code,
-        requestId: result.RequestId
+        error: agentResult.Message || 'Failed to create AI agent instance',
+        code: agentResult.Code,
+        requestId: agentResult.RequestId
       })
       return
     }
 
-    console.log('Digital human interview started successfully:', result.Data?.AgentInstanceId)
+    // Step 2: Create digital human video stream (separate from agent)
+    const digitalHumanConfig = {
+      DigitalHumanConfig: {
+        DigitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
+        Layout: {
+          Top: 0,
+          Left: 0,
+          Width: 1080,
+          Height: 1920,
+          Layer: 2
+        },
+        BackgroundColor: "#00000000" // Transparent background
+      },
+      RTCConfig: {
+        RoomId: room_id,
+        StreamId: `${agentStreamId}_video` // Separate stream for video
+      },
+      VideoConfig: {
+        Width: 1080,
+        Height: 1920,
+        Bitrate: 3000000
+      },
+      Assets: [] // No additional assets for now
+    }
+
+    console.log('🎭 Creating Digital Human video stream...')
+    console.log('Digital Human AI Config:', JSON.stringify(digitalHumanConfig, null, 2))
+
+    const digitalHumanResult = await makeZegoRequest('CreateDigitalHumanStreamTask', digitalHumanConfig, 'digitalhuman')
+
+    if (digitalHumanResult.Code !== 0) {
+      console.error('ZEGO CreateDigitalHumanStreamTask failed:', digitalHumanResult)
+      // Clean up the agent instance since digital human failed
+      try {
+        await makeZegoRequest('DeleteAgentInstance', {
+          AgentInstanceId: agentResult.Data?.AgentInstanceId
+        }, 'aiagent')
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup agent instance:', cleanupError)
+      }
+      
+      res.status(400).json({
+        error: digitalHumanResult.Message || 'Failed to create digital human stream task',
+        code: digitalHumanResult.Code,
+        requestId: digitalHumanResult.RequestId
+      })
+      return
+    }
+
+    console.log('✅ AI Agent created successfully:', agentResult.Data?.AgentInstanceId)
+    console.log('✅ Digital Human stream task created successfully:', digitalHumanResult.Data?.TaskId)
 
     res.json({
       success: true,
-      agentInstanceId: result.Data?.AgentInstanceId,
+      agentInstanceId: agentResult.Data?.AgentInstanceId,
+      digitalHumanTaskId: digitalHumanResult.Data?.TaskId,
       agentUserId: agentUserId,
       agentStreamId: agentStreamId,
+      digitalHumanVideoStreamId: `${agentStreamId}_video`,
       userStreamId: userStreamId,
-      digitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97'
+      digitalHumanId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
+      roomId: room_id
     })
 
   } catch (error: any) {
-    logAxiosError('Start digital human interview HTTP error', error)
+    logAxiosError('Start digital human stream task HTTP error', error)
     res.status(500).json({ error: error.message || 'Internal error' })
   }
 })
@@ -355,6 +408,40 @@ app.post('/api/stop', async (req: Request, res: Response): Promise<void> => {
 
   } catch (error: any) {
     console.error('Stop error:', error)
+    res.status(500).json({ error: error.message || 'Internal error' })
+  }
+})
+
+app.post('/api/stop-digital-human', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { task_id } = req.body
+
+    if (!task_id) {
+      res.status(400).json({ error: 'task_id required' })
+      return
+    }
+
+    console.log('🛑 Stopping digital human stream task:', task_id)
+
+    const result = await makeZegoRequest('StopDigitalHumanStreamTask', {
+      TaskId: task_id
+    }, 'digitalhuman')
+
+    if (result.Code !== 0) {
+      console.error('ZEGO StopDigitalHumanStreamTask failed:', result)
+      res.status(400).json({ 
+        error: result.Message || 'Failed to stop digital human stream task',
+        code: result.Code,
+        requestId: result.RequestId
+      })
+      return
+    }
+
+    console.log('✅ Digital human stream task stopped successfully:', task_id)
+    res.json({ success: true })
+
+  } catch (error: any) {
+    logAxiosError('Stop digital human stream task HTTP error', error)
     res.status(500).json({ error: error.message || 'Internal error' })
   }
 })

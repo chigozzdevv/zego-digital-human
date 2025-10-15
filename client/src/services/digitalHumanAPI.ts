@@ -45,17 +45,16 @@ api.interceptors.response.use(
 )
 
 export const digitalHumanAPI = {
-  async startInterview(roomId: string, userId: string): Promise<{ agentInstanceId: string }> {
+  async startInterview(roomId: string, userId: string): Promise<{ agentInstanceId: string; digitalHumanTaskId: string; digitalHumanVideoStreamId: string }> {
     try {
       const requestData = {
         room_id: roomId,
         user_id: userId,
         user_stream_id: `${userId}_stream`,
-        digital_human_id: 'c4b56d5c-db98-4d91-86d4-5a97b507da97', // Test digital human ID
-        config_id: 'web'
+        digital_human_id: 'c4b56d5c-db98-4d91-86d4-5a97b507da97' // Test digital human ID
       }
       
-      console.log('🚀 Starting digital human interview with data:', requestData)
+      console.log('🚀 Starting digital human interview with AI Agent and video stream:', requestData)
       
       const response = await api.post('/api/start-digital-human', requestData)
       
@@ -63,14 +62,20 @@ export const digitalHumanAPI = {
         throw new Error(response.data?.error || 'Digital human interview start failed')
       }
       
-      if (!response.data.agentInstanceId) {
-        throw new Error('No agent instance ID returned')
+      if (!response.data.agentInstanceId || !response.data.digitalHumanTaskId) {
+        throw new Error('Missing required IDs in response')
       }
       
-      console.log('✅ Digital human interview started successfully:', response.data.agentInstanceId)
+      console.log('✅ Digital human interview started successfully:', {
+        agentInstanceId: response.data.agentInstanceId,
+        digitalHumanTaskId: response.data.digitalHumanTaskId,
+        digitalHumanVideoStreamId: response.data.digitalHumanVideoStreamId
+      })
       
       return {
-        agentInstanceId: response.data.agentInstanceId
+        agentInstanceId: response.data.agentInstanceId,
+        digitalHumanTaskId: response.data.digitalHumanTaskId,
+        digitalHumanVideoStreamId: response.data.digitalHumanVideoStreamId
       }
     } catch (error: any) {
       console.error('❌ Start digital human interview failed:', error.response?.data || error.message)
@@ -78,60 +83,37 @@ export const digitalHumanAPI = {
     }
   },
 
-  async sendMessage(agentInstanceId: string, message: string): Promise<void> {
-    if (!agentInstanceId) {
-      throw new Error('Agent instance ID is required')
-    }
-    
-    if (!message || !message.trim()) {
-      throw new Error('Message content is required')
-    }
-
-    try {
-      const requestData = {
-        agent_instance_id: agentInstanceId,
-        message: message.trim(),
-      }
-      
-      console.log('💬 Sending message to digital human:', {
-        agentInstanceId,
-        messageLength: message.length,
-        messagePreview: message.substring(0, 50) + (message.length > 50 ? '...' : '')
-      })
-      
-      const response = await api.post('/api/send-message', requestData)
-      
-      if (!response.data || !response.data.success) {
-        throw new Error(response.data?.error || 'Message send failed')
-      }
-      
-      console.log('✅ Message sent to digital human successfully')
-    } catch (error: any) {
-      console.error('❌ Send message to digital human failed:', error.response?.data || error.message)
-      throw new Error(error.response?.data?.error || error.message || 'Failed to send message to digital human')
-    }
-  },
-
-  async stopInterview(agentInstanceId: string): Promise<void> {
-    if (!agentInstanceId) {
-      console.warn('⚠️ No agent instance ID provided for stop interview')
+  async stopInterview(agentInstanceId: string, digitalHumanTaskId: string): Promise<void> {
+    if (!agentInstanceId || !digitalHumanTaskId) {
+      console.warn('⚠️ Missing agent instance ID or digital human task ID')
       return
     }
 
     try {
-      const requestData = {
-        agent_instance_id: agentInstanceId,
-      }
+      // Stop AI Agent
+      console.log('🛑 Stopping AI Agent instance:', agentInstanceId)
+      const agentResponse = await api.post('/api/stop', {
+        agent_instance_id: agentInstanceId
+      })
       
-      console.log('🛑 Stopping digital human interview:', agentInstanceId)
-      
-      const response = await api.post('/api/stop', requestData)
-      
-      if (!response.data || !response.data.success) {
-        console.warn('⚠️ Digital human interview stop returned non-success:', response.data)
+      if (agentResponse.data?.success) {
+        console.log('✅ AI Agent stopped successfully')
       } else {
-        console.log('✅ Digital human interview stopped successfully')
+        console.warn('⚠️ AI Agent stop returned non-success:', agentResponse.data)
       }
+
+      // Stop Digital Human
+      console.log('🛑 Stopping Digital Human stream task:', digitalHumanTaskId)
+      const digitalHumanResponse = await api.post('/api/stop-digital-human', {
+        task_id: digitalHumanTaskId
+      })
+      
+      if (digitalHumanResponse.data?.success) {
+        console.log('✅ Digital Human stream task stopped successfully')
+      } else {
+        console.warn('⚠️ Digital Human stream task stop returned non-success:', digitalHumanResponse.data)
+      }
+
     } catch (error: any) {
       console.error('❌ Stop digital human interview failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to stop digital human interview')
