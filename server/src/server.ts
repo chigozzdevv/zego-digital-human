@@ -299,7 +299,46 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    // Step 2: Create digital human video stream (separate from agent)
+    // Step 2: First, verify the digital human exists in your account
+    console.log('🔍 Verifying digital human exists:', digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97')
+    try {
+      const digitalHumanList = await makeZegoRequest('GetDigitalHumanList', {}, 'digitalhuman')
+      if (digitalHumanList.Code === 0) {
+        const availableHumans = digitalHumanList.Data?.List || []
+        const requestedHuman = availableHumans.find((h: any) => h.DigitalHumanId === (digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97'))
+        
+        if (!requestedHuman) {
+          console.error('❌ Digital Human ID not found in available list!')
+          console.error('📋 Available Digital Humans:', availableHumans.map((h: any) => ({
+            id: h.DigitalHumanId,
+            name: h.Name || 'No Name'
+          })))
+          
+          // Clean up the agent instance since digital human doesn't exist
+          try {
+            await makeZegoRequest('DeleteAgentInstance', {
+              AgentInstanceId: agentResult.Data?.AgentInstanceId
+            }, 'aiagent')
+          } catch (cleanupError) {
+            console.warn('Failed to cleanup agent instance:', cleanupError)
+          }
+          
+          res.status(400).json({
+            error: 'Digital Human ID not found in your account',
+            requestedId: digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97',
+            availableIds: availableHumans.map((h: any) => h.DigitalHumanId),
+            availableCount: availableHumans.length
+          })
+          return
+        }
+        
+        console.log('✅ Digital Human found:', requestedHuman.Name || requestedHuman.DigitalHumanId)
+      }
+    } catch (verifyError: any) {
+      console.warn('⚠️ Could not verify digital human list:', verifyError.message)
+    }
+
+    // Step 3: Create digital human video stream (separate from agent)
     // Use valid standard resolution to avoid product limit issues
     const digitalHumanConfig = {
       DigitalHumanConfig: {
@@ -488,6 +527,35 @@ app.post('/api/stop-digital-human', async (req: Request, res: Response): Promise
 
   } catch (error: any) {
     logAxiosError('Stop digital human stream task HTTP error', error)
+    res.status(500).json({ error: error.message || 'Internal error' })
+  }
+})
+
+// Helper endpoint to query available digital humans
+app.get('/api/digital-humans', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    console.log('📋 Querying available digital humans...')
+    
+    const result = await makeZegoRequest('GetDigitalHumanList', {}, 'digitalhuman')
+    
+    if (result.Code !== 0) {
+      console.error('ZEGO GetDigitalHumanList failed:', result)
+      res.status(400).json({
+        error: result.Message || 'Failed to query digital humans',
+        code: result.Code,
+        requestId: result.RequestId
+      })
+      return
+    }
+
+    console.log('✅ Digital humans queried successfully:', result.Data?.List?.length || 0, 'found')
+    res.json({
+      success: true,
+      digitalHumans: result.Data?.List || []
+    })
+
+  } catch (error: any) {
+    logAxiosError('Query digital humans HTTP error', error)
     res.status(500).json({ error: error.message || 'Internal error' })
   }
 })
