@@ -70,6 +70,37 @@ const baseAgentConfig = {
   }
 }
 
+// Helpers
+function shortHash(input: string, len = 24): string {
+  return crypto.createHash('sha1').update(input).digest('hex').slice(0, Math.max(1, Math.min(len, 40)))
+}
+
+function buildAgentIdentifiers(roomId: string) {
+  const h = shortHash(roomId, 24)
+  // Ensure <= 32 chars and allowed charset
+  const agentUserId = `agt_${h}` // e.g., 28 chars
+  const agentStreamId = `agt_s_${h}` // e.g., 30 chars
+  return { agentUserId, agentStreamId }
+}
+
+function logAxiosError(prefix: string, err: any, extra?: Record<string, any>) {
+  const status = err?.response?.status
+  const statusText = err?.response?.statusText
+  const data = err?.response?.data
+  const safeData = typeof data === 'string' ? data : (data ? JSON.stringify(data) : undefined)
+  const method = err?.config?.method
+  // Avoid logging full URL because signature appears in query string
+  const reqId = data?.RequestId || data?.request_id || err?.response?.headers?.['x-request-id']
+  console.error(`${prefix}`, {
+    status,
+    statusText,
+    method,
+    requestId: reqId,
+    response: safeData,
+    ...(extra || {})
+  })
+}
+
 function generateZegoSignature(action: string) {
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = crypto.randomBytes(8).toString('hex')
@@ -105,7 +136,7 @@ async function makeZegoRequest(action: string, body: object = {}): Promise<any> 
     })
     return response.data
   } catch (error: any) {
-    console.error('ZEGO API Error:', error.response?.data || error.message)
+    logAxiosError('ZEGO API HTTP Error', error, { action })
     throw error
   }
 }
@@ -143,8 +174,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     const agentId = await registerAgent()
 
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentUserId = `agent_${room_id}`
-    const agentStreamId = `agent_stream_${room_id}`
+    const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
 
     const instanceConfig = {
       AgentId: agentId,
@@ -177,7 +207,8 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     const result = await makeZegoRequest('CreateAgentInstance', instanceConfig)
 
     if (result.Code !== 0) {
-      res.status(400).json({ error: result.Message || 'Failed to create instance' })
+      console.error('ZEGO CreateAgentInstance failed with payload:', JSON.stringify(result, null, 2))
+      res.status(400).json({ error: result.Message || 'Failed to create instance', code: result.Code, requestId: result.RequestId })
       return
     }
 
@@ -190,7 +221,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     })
 
   } catch (error: any) {
-    console.error('Start error:', error)
+    logAxiosError('Start regular agent error', error)
     res.status(500).json({ error: error.message || 'Internal error' })
   }
 })
@@ -210,8 +241,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const agentId = await registerAgent()
 
     const userStreamId = user_stream_id || `${user_id}_stream`
-    const agentUserId = `agent_${room_id}`
-    const agentStreamId = `agent_stream_${room_id}`
+    const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
 
     console.log('Digital human identifiers:', {
       agentUserId,
@@ -225,6 +255,8 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const digitalHumanConfig = {
       AgentId: agentId,
       UserId: user_id,
+      // Include LLM/TTS/ASR so server has full config at instance level
+      ...baseAgentConfig,
       RTC: {
         RoomId: room_id,
         AgentUserId: agentUserId,
@@ -258,15 +290,11 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const result = await makeZegoRequest('CreateDigitalHumanAgentInstance', digitalHumanConfig)
 
     if (result.Code !== 0) {
-      console.error('ZEGO CreateDigitalHumanAgentInstance failed:', {
-        code: result.Code,
-        message: result.Message,
-        config: digitalHumanConfig
-      })
+      console.error('ZEGO CreateDigitalHumanAgentInstance failed with payload:', JSON.stringify(result, null, 2))
       res.status(400).json({
         error: result.Message || 'Failed to create digital human instance',
         code: result.Code,
-        details: result.Message
+        requestId: result.RequestId
       })
       return
     }
@@ -283,7 +311,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     })
 
   } catch (error: any) {
-    console.error('Start digital human interview error:', error)
+    logAxiosError('Start digital human interview HTTP error', error)
     res.status(500).json({ error: error.message || 'Internal error' })
   }
 })
