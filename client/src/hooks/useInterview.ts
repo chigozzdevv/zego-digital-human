@@ -322,8 +322,10 @@ export const useInterview = () => {
     dispatch({ type: 'SET_START_TIME', payload: Date.now() })
     
     try {
-      const roomId = generateRtcId('interview')
-      const userId = generateRtcId('candidate')
+      const rawRoomId = generateRtcId('interview')
+      const rawUserId = generateRtcId('candidate')
+      const roomId = rawRoomId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || rawRoomId.slice(0, 32)
+      const userId = rawUserId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || rawUserId.slice(0, 32)
 
       await zegoService.current.initialize()
       

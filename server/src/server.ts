@@ -223,11 +223,10 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 
     // Prepare CreateAgentInstance payloads (fallbacks for RTC schema differences)
     const sanitizedUserId = String(user_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
-    const userIdCandidates = [sanitizedUserId]
 
-    const baseInstance = (uid: string) => {
+    const buildInstancePayload = (uid: string) => {
       const normalizedUserId = String(uid).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
-      const rtcPayload = {
+      const rtc = {
         RoomID: room_id,
         UserID: normalizedUserId,
         AgentUserID: agentUserId,
@@ -254,11 +253,11 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
         AdvancedConfig: {
           InterruptMode: 0
         },
-        RTC: rtcPayload
+        RTC: rtc
       }
     }
 
-    const payloadAttempts = userIdCandidates.map(uid => baseInstance(uid))
+    const payloadAttempts = [buildInstancePayload(sanitizedUserId)]
 
     console.log('🧪 CreateAgentInstance identifiers:', {
       userId: user_id,
@@ -336,11 +335,10 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const agentId = await registerAgent()
 
     const sanitizedUserIdDH = String(user_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
-    const userIdCandidatesDH = [sanitizedUserIdDH]
 
-    const baseInstance = (uid: string) => {
+    const buildInstancePayloadDH = (uid: string) => {
       const normalizedUserId = uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
-      const rtcPayload = {
+      const rtc = {
         RoomID: room_id,
         UserID: normalizedUserId,
         AgentUserID: agentUserId,
@@ -367,11 +365,11 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         AdvancedConfig: {
           InterruptMode: 0
         },
-        RTC: rtcPayload
+        RTC: rtc
       }
     }
 
-    const payloadAttempts = userIdCandidatesDH.map(uid => baseInstance(uid))
+    const payloadAttempts = [buildInstancePayloadDH(sanitizedUserIdDH)]
 
     console.log('🧪 CreateAgentInstance identifiers:', {
       userId: user_id,
@@ -465,8 +463,8 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         }
       },
       RTCConfig: {
-        RoomId: room_id,
-        StreamId: videoStreamId
+        RoomID: room_id,
+        StreamID: videoStreamId
       },
       VideoConfig: {
         Width: clamped.width,
