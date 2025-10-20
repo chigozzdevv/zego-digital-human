@@ -336,6 +336,8 @@ export const useInterview = () => {
         roomId,
         userId,
         agentInstanceId: result.agentInstanceId,
+        digitalHumanTaskId: result.digitalHumanTaskId,
+        digitalHumanVideoStreamId: result.digitalHumanVideoStreamId,
         isActive: true,
         voiceSettings: defaultVoiceSettings
       }
@@ -443,7 +445,7 @@ export const useInterview = () => {
       }
       
       if (state.session?.agentInstanceId) {
-        await digitalHumanAPI.stopInterview(state.session.agentInstanceId)
+        await digitalHumanAPI.stopInterview(state.session.agentInstanceId, state.session.digitalHumanTaskId)
       }
       
       await zegoService.current.leaveRoom()

@@ -35,6 +35,10 @@ export interface ChatSession {
   roomId: string
   userId: string
   agentInstanceId?: string
+  // Digital human session metadata
+  digitalHumanTaskId?: string
+  digitalHumanVideoStreamId?: string
+  digitalHumanId?: string
   isActive: boolean
   conversationId?: string
   voiceSettings: VoiceSettings

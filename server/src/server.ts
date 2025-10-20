@@ -119,9 +119,25 @@ async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiag
   const url = `${baseUrl}?${queryString}`
 
   try {
+    const safeQuery = { ...queryParams, Signature: '***' }
+    console.log('➡️ ZEGO API Request', {
+      action,
+      apiType,
+      urlBase: baseUrl,
+      query: safeQuery,
+      body
+    })
     const response = await axios.post(url, body, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 30000
+    })
+    console.log('⬅️ ZEGO API Response', {
+      action,
+      apiType,
+      status: response.status,
+      requestId: response.data?.RequestId,
+      code: response.data?.Code,
+      message: response.data?.Message
     })
     return response.data
   } catch (error: any) {
@@ -130,18 +146,53 @@ async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiag
   }
 }
 
+function clampVideoDimensions(width: number, height: number) {
+  const MAX_W = 1920
+  const MAX_H = 2560
+  const MAX_PIXELS = 1920 * 1080
+  let w = Math.max(1, Math.min(MAX_W, Math.floor(width)))
+  let h = Math.max(1, Math.min(MAX_H, Math.floor(height)))
+  const pixels = w * h
+  if (pixels > MAX_PIXELS) {
+    const scale = Math.sqrt(MAX_PIXELS / pixels)
+    w = Math.max(1, Math.min(MAX_W, Math.floor(w * scale)))
+    h = Math.max(1, Math.min(MAX_H, Math.floor(h * scale)))
+    while (w * h > MAX_PIXELS && w > 1 && h > 1) {
+      if (w >= h) w--
+      else h--
+    }
+  }
+  return { width: w, height: h }
+}
+
+function uniqueStreamId(base: string) {
+  const ts = Date.now().toString(36)
+  const rand = crypto.randomBytes(3).toString('hex')
+  let id = `${base}_v_${ts}_${rand}`.toLowerCase()
+  if (id.length > 128) id = id.slice(0, 128)
+  return id
+}
+
 // Register AI agent once per server startup (includes LLM, TTS, ASR configs)
 async function registerAgent(): Promise<string> {
-  if (REGISTERED_AGENT_ID) return REGISTERED_AGENT_ID
+  if (REGISTERED_AGENT_ID) {
+    console.log('♻️ Reusing existing agent:', REGISTERED_AGENT_ID)
+    return REGISTERED_AGENT_ID
+  }
 
   const agentId = `interview_agent_${Date.now()}`
-  const result = await makeZegoRequest('RegisterAgent', {
+  const registerPayload = {
     AgentId: agentId,
     Name: 'AI Interview Assistant',
-    ...AGENT_CONFIG // LLM, TTS, ASR configurations
-  })
+    ...AGENT_CONFIG
+  }
+  
+  console.log('📤 RegisterAgent request:', JSON.stringify(registerPayload, null, 2))
+  const result = await makeZegoRequest('RegisterAgent', registerPayload)
+  console.log('📥 RegisterAgent response:', JSON.stringify(result, null, 2))
 
   if (result.Code !== 0) {
+    console.error('❌ RegisterAgent failed. Message:', result.Message)
     throw new Error(`RegisterAgent failed: ${result.Code} ${result.Message}`)
   }
 
@@ -177,7 +228,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
       MessageHistory: {
         SyncMode: 1,
         Messages: [],
-        WindowSize: 50
+        WindowSize: 10
       },
       CallbackConfig: {
         ASRResult: 1,        // Voice transcription events
@@ -192,10 +243,12 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    console.log('📤 CreateAgentInstance request:', JSON.stringify(instanceConfig, null, 2))
     const result = await makeZegoRequest('CreateAgentInstance', instanceConfig)
+    console.log('📥 CreateAgentInstance response:', JSON.stringify(result, null, 2))
 
     if (result.Code !== 0) {
-      console.error('❌ CreateAgentInstance failed:', result)
+      console.error('❌ CreateAgentInstance failed. Message:', result.Message)
       res.status(400).json({ 
         error: result.Message || 'Failed to create instance', 
         code: result.Code, 
@@ -224,6 +277,12 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/start-digital-human', async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id, user_id, user_stream_id, digital_human_id } = req.body
+    // Optional overrides to align with ZEGOCLOUD Digital Human API
+    const reqLayout = req.body?.layout as { Top?: number; Left?: number; Width?: number; Height?: number; Layer?: number } | undefined
+    const reqVideo = req.body?.video as { Width?: number; Height?: number; Bitrate?: number } | undefined
+    const reqAssets = req.body?.assets as Array<{ AssetType: number; AssetUrl: string; Layout: { Top: number; Left: number; Width: number; Height: number; Layer?: number } }> | undefined
+    const reqBackgroundColor = (req.body?.backgroundColor as string | undefined) || undefined
+    const reqTTL = (req.body?.ttl as number | undefined)
 
     if (!room_id || !user_id) {
       res.status(400).json({ error: 'room_id and user_id required' })
@@ -250,7 +309,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       MessageHistory: {
         SyncMode: 1,
         Messages: [],
-        WindowSize: 50
+        WindowSize: 10
       },
       CallbackConfig: {
         ASRResult: 1,
@@ -265,10 +324,12 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       }
     }
 
+    console.log('📤 CreateAgentInstance request:', JSON.stringify(instanceConfig, null, 2))
     const agentResult = await makeZegoRequest('CreateAgentInstance', instanceConfig, 'aiagent')
+    console.log('📥 CreateAgentInstance response:', JSON.stringify(agentResult, null, 2))
 
     if (agentResult.Code !== 0) {
-      console.error('❌ CreateAgentInstance failed:', agentResult)
+      console.error('❌ CreateAgentInstance failed. Message:', agentResult.Message)
       res.status(400).json({
         error: agentResult.Message || 'Failed to create AI agent instance',
         code: agentResult.Code,
@@ -313,17 +374,24 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     }
 
     // Step 3: Create digital human video stream task
-    // Resolution: 1280×720 = 921,600 pixels (within 1920×1080 limit)
-    const videoStreamId = `${agentStreamId}_video`
-    const digitalHumanConfig = {
+    const defaultWidth = reqVideo?.Width ?? 1280
+    const defaultHeight = reqVideo?.Height ?? 720
+    const clamped = clampVideoDimensions(defaultWidth, defaultHeight)
+    const videoStreamId = uniqueStreamId(agentStreamId)
+    console.log('🧮 Digital human video config', {
+      requested: { width: defaultWidth, height: defaultHeight },
+      clamped
+    })
+    const digitalHumanConfig: any = {
       DigitalHumanConfig: {
         DigitalHumanId: digitalHumanId,
+        ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : {}),
         Layout: {
-          Top: 0,
-          Left: 0,
-          Width: 1280,
-          Height: 720,
-          Layer: 2
+          Top: reqLayout?.Top ?? 0,
+          Left: reqLayout?.Left ?? 0,
+          Width: Math.min(reqLayout?.Width ?? clamped.width, clamped.width),
+          Height: Math.min(reqLayout?.Height ?? clamped.height, clamped.height),
+          Layer: reqLayout?.Layer ?? 2
         }
       },
       RTCConfig: {
@@ -331,28 +399,44 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         StreamId: videoStreamId
       },
       VideoConfig: {
-        Width: 1280,
-        Height: 720,
-        Bitrate: 2000000
+        Width: clamped.width,
+        Height: clamped.height,
+        Bitrate: reqVideo?.Bitrate ?? 2000000
       },
-      Assets: [{
-        AssetType: 1, // Image background
-        AssetUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
-        Layout: {
-          Top: 0,
-          Left: 0,
-          Width: 1280,
-          Height: 720,
-          Layer: 1
-        }
-      }]
+      Assets: (reqAssets && Array.isArray(reqAssets) && reqAssets.length > 0)
+        ? reqAssets
+        : [{
+            AssetType: 1, // Image background (required by API)
+            // Use an HTTP placeholder to comply with "URL" requirement
+            AssetUrl: `https://via.placeholder.com/${clamped.width}x${clamped.height}.png?text=Digital+Human+Background`,
+            Layout: {
+              Top: 0,
+              Left: 0,
+              Width: clamped.width,
+              Height: clamped.height,
+              Layer: 1
+            }
+          }]
+    }
+    if (typeof reqTTL === 'number' && reqTTL >= 10 && reqTTL <= 86400) {
+      digitalHumanConfig.TTL = reqTTL
     }
 
-    console.log('🎭 Creating digital human video stream task...')
+    console.log('🎭 Creating digital human video stream task...', {
+      videoStreamId,
+      digitalHumanId,
+      roomId: room_id
+    })
+    console.log('📤 CreateDigitalHumanStreamTask request body:', JSON.stringify(digitalHumanConfig, null, 2))
     const digitalHumanResult = await makeZegoRequest('CreateDigitalHumanStreamTask', digitalHumanConfig, 'digitalhuman')
 
     if (digitalHumanResult.Code !== 0) {
-      console.error('❌ CreateDigitalHumanStreamTask failed:', digitalHumanResult)
+      console.error('❌ CreateDigitalHumanStreamTask failed:', {
+        code: digitalHumanResult.Code,
+        message: digitalHumanResult.Message,
+        requestId: digitalHumanResult.RequestId,
+        data: digitalHumanResult.Data
+      })
       
       // Cleanup agent instance
       await makeZegoRequest('DeleteAgentInstance', {
@@ -367,7 +451,12 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    console.log('✅ Digital Human video stream created:', digitalHumanResult.Data?.TaskId)
+    console.log('✅ Digital Human video stream created:', {
+      taskId: digitalHumanResult.Data?.TaskId,
+      videoStreamId,
+      width: digitalHumanConfig.VideoConfig.Width,
+      height: digitalHumanConfig.VideoConfig.Height
+    })
 
     res.json({
       success: true,

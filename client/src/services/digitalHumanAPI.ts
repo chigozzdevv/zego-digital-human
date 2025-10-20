@@ -83,9 +83,9 @@ export const digitalHumanAPI = {
     }
   },
 
-  async stopInterview(agentInstanceId: string, digitalHumanTaskId: string): Promise<void> {
-    if (!agentInstanceId || !digitalHumanTaskId) {
-      console.warn('⚠️ Missing agent instance ID or digital human task ID')
+  async stopInterview(agentInstanceId: string, digitalHumanTaskId?: string): Promise<void> {
+    if (!agentInstanceId) {
+      console.warn('⚠️ Missing agent instance ID')
       return
     }
 
@@ -102,21 +102,46 @@ export const digitalHumanAPI = {
         console.warn('⚠️ AI Agent stop returned non-success:', agentResponse.data)
       }
 
-      // Stop Digital Human
-      console.log('🛑 Stopping Digital Human stream task:', digitalHumanTaskId)
-      const digitalHumanResponse = await api.post('/api/stop-digital-human', {
-        task_id: digitalHumanTaskId
-      })
-      
-      if (digitalHumanResponse.data?.success) {
-        console.log('✅ Digital Human stream task stopped successfully')
+      // Stop Digital Human if task id provided
+      if (digitalHumanTaskId) {
+        console.log('🛑 Stopping Digital Human stream task:', digitalHumanTaskId)
+        const digitalHumanResponse = await api.post('/api/stop-digital-human', {
+          task_id: digitalHumanTaskId
+        })
+        
+        if (digitalHumanResponse.data?.success) {
+          console.log('✅ Digital Human stream task stopped successfully')
+        } else {
+          console.warn('⚠️ Digital Human stream task stop returned non-success:', digitalHumanResponse.data)
+        }
       } else {
-        console.warn('⚠️ Digital Human stream task stop returned non-success:', digitalHumanResponse.data)
+        console.warn('ℹ️ No digital human task id provided; skipping video stop')
       }
 
     } catch (error: any) {
       console.error('❌ Stop digital human interview failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to stop digital human interview')
+    }
+  },
+
+  async sendMessage(agentInstanceId: string, message: string): Promise<void> {
+    if (!agentInstanceId) throw new Error('Agent instance ID is required')
+    const trimmed = (message || '').trim()
+    if (!trimmed) throw new Error('Message content is required')
+
+    try {
+      console.log('💬 Sending message to agent instance:', agentInstanceId)
+      const response = await api.post('/api/send-message', {
+        agent_instance_id: agentInstanceId,
+        message: trimmed
+      })
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || 'Message send failed')
+      }
+      console.log('✅ Message sent successfully')
+    } catch (error: any) {
+      console.error('❌ Send message failed:', error.response?.data || error.message)
+      throw new Error(error.response?.data?.error || error.message || 'Failed to send message')
     }
   },
 
