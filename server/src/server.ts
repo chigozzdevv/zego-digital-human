@@ -223,37 +223,42 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 
     // Prepare CreateAgentInstance payloads (fallbacks for RTC schema differences)
     const sanitizedUserId = String(user_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
-    const userIdCandidates = Array.from(new Set([String(user_id), sanitizedUserId]))
+    const userIdCandidates = [sanitizedUserId]
 
-    const baseInstance = (uid: string) => ({
-      AgentId: agentId,
-      UserId: uid,
-      MessageHistory: {
-        SyncMode: 1,
-        Messages: [],
-        WindowSize: 10
-      },
-      CallbackConfig: {
-        ASRResult: 1,        // Voice transcription events
-        LLMResult: 1,        // AI response events
-        Exception: 1,
-        Interrupted: 1,      // User interruption support
-        UserSpeakAction: 1,
-        AgentSpeakAction: 1
-      },
-      AdvancedConfig: {
-        InterruptMode: 0  // Enable natural interruption
+    const baseInstance = (uid: string) => {
+      const normalizedUserId = String(uid).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
+      const rtcPayload = {
+        RoomID: room_id,
+        UserID: normalizedUserId,
+        AgentUserID: agentUserId,
+        AgentStreamID: agentStreamId,
+        UserStreamID: userStreamId
       }
-    })
 
-    const payloadAttempts = userIdCandidates.flatMap(uid => ([
-      { ...baseInstance(uid), RTC: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId, UserStreamId: userStreamId } },
-      { ...baseInstance(uid), RTCConfig: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId, UserStreamId: userStreamId } },
-      { ...baseInstance(uid), RTC: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId } },
-      { ...baseInstance(uid), RTCConfig: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId } },
-      { ...baseInstance(uid), RTC: { RoomId: room_id, StreamId: agentStreamId } },
-      { ...baseInstance(uid), RTCConfig: { RoomId: room_id, StreamId: agentStreamId } }
-    ]))
+      return {
+        AgentId: agentId,
+        UserId: normalizedUserId,
+        MessageHistory: {
+          SyncMode: 1,
+          Messages: [],
+          WindowSize: 10
+        },
+        CallbackConfig: {
+          ASRResult: 1,
+          LLMResult: 1,
+          Exception: 1,
+          Interrupted: 1,
+          UserSpeakAction: 1,
+          AgentSpeakAction: 1
+        },
+        AdvancedConfig: {
+          InterruptMode: 0
+        },
+        RTC: rtcPayload
+      }
+    }
+
+    const payloadAttempts = userIdCandidates.map(uid => baseInstance(uid))
 
     console.log('🧪 CreateAgentInstance identifiers:', {
       userId: user_id,
@@ -331,37 +336,42 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const agentId = await registerAgent()
 
     const sanitizedUserIdDH = String(user_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
-    const userIdCandidatesDH = Array.from(new Set([String(user_id), sanitizedUserIdDH]))
+    const userIdCandidatesDH = [sanitizedUserIdDH]
 
-    const baseInstance = (uid: string) => ({
-      AgentId: agentId,
-      UserId: uid,
-      MessageHistory: {
-        SyncMode: 1,
-        Messages: [],
-        WindowSize: 10
-      },
-      CallbackConfig: {
-        ASRResult: 1,
-        LLMResult: 1,
-        Exception: 1,
-        Interrupted: 1,
-        UserSpeakAction: 1,
-        AgentSpeakAction: 1
-      },
-      AdvancedConfig: {
-        InterruptMode: 0
+    const baseInstance = (uid: string) => {
+      const normalizedUserId = uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
+      const rtcPayload = {
+        RoomID: room_id,
+        UserID: normalizedUserId,
+        AgentUserID: agentUserId,
+        AgentStreamID: agentStreamId,
+        UserStreamID: userStreamId
       }
-    })
 
-    const payloadAttempts = userIdCandidatesDH.flatMap(uid => ([
-      { ...baseInstance(uid), RTC: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId, UserStreamId: userStreamId } },
-      { ...baseInstance(uid), RTCConfig: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId, UserStreamId: userStreamId } },
-      { ...baseInstance(uid), RTC: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId } },
-      { ...baseInstance(uid), RTCConfig: { RoomId: room_id, AgentUserId: agentUserId, AgentStreamId: agentStreamId } },
-      { ...baseInstance(uid), RTC: { RoomId: room_id, StreamId: agentStreamId } },
-      { ...baseInstance(uid), RTCConfig: { RoomId: room_id, StreamId: agentStreamId } }
-    ]))
+      return {
+        AgentId: agentId,
+        UserId: normalizedUserId,
+        MessageHistory: {
+          SyncMode: 1,
+          Messages: [],
+          WindowSize: 10
+        },
+        CallbackConfig: {
+          ASRResult: 1,
+          LLMResult: 1,
+          Exception: 1,
+          Interrupted: 1,
+          UserSpeakAction: 1,
+          AgentSpeakAction: 1
+        },
+        AdvancedConfig: {
+          InterruptMode: 0
+        },
+        RTC: rtcPayload
+      }
+    }
+
+    const payloadAttempts = userIdCandidatesDH.map(uid => baseInstance(uid))
 
     console.log('🧪 CreateAgentInstance identifiers:', {
       userId: user_id,
