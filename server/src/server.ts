@@ -70,10 +70,16 @@ function shortHash(input: string, len = 24): string {
 
 function buildAgentIdentifiers(roomId: string) {
   const hash = shortHash(roomId, 24)
-  return {
-    agentUserId: `agt_${hash}`,      // Max 32 chars, alphanumeric
-    agentStreamId: `agt_s_${hash}`   // Max 32 chars, alphanumeric + underscore
-  }
+  const suffix = `${Date.now().toString(36).slice(-4)}${crypto.randomBytes(2).toString('hex')}`
+  // AgentUserId must be alphanumeric only, <= 32
+  let agentUserId = `agt${hash}${suffix}`.replace(/[^a-zA-Z0-9]/g, '')
+  if (agentUserId.length > 32) agentUserId = agentUserId.slice(0, 32)
+
+  // AgentStreamId allows letters, digits, '_' and '-', <= 128
+  let agentStreamId = `agt_s_${hash}_${suffix}`.toLowerCase().replace(/[^a-z0-9_-]/g, '')
+  if (agentStreamId.length > 128) agentStreamId = agentStreamId.slice(0, 128)
+
+  return { agentUserId, agentStreamId }
 }
 
 function logAxiosError(prefix: string, err: any, extra?: Record<string, any>) {
@@ -212,7 +218,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     }
 
     const agentId = await registerAgent()
-    const userStreamId = user_stream_id || `${user_id}_stream`
+    const userStreamId = (user_stream_id || `${user_id}_stream`).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 128)
     const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
 
     // CreateAgentInstance: links AgentId to a conversation session
@@ -244,6 +250,18 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     }
 
     console.log('📤 CreateAgentInstance request:', JSON.stringify(instanceConfig, null, 2))
+    console.log('🧪 CreateAgentInstance identifiers:', {
+      userId: user_id,
+      agentUserId,
+      agentStreamId,
+      userStreamId,
+      lengths: {
+        userId: String(user_id || '').length,
+        agentUserId: agentUserId.length,
+        agentStreamId: agentStreamId.length,
+        userStreamId: userStreamId.length
+      }
+    })
     const result = await makeZegoRequest('CreateAgentInstance', instanceConfig)
     console.log('📥 CreateAgentInstance response:', JSON.stringify(result, null, 2))
 
@@ -289,7 +307,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    const userStreamId = user_stream_id || `${user_id}_stream`
+    const userStreamId = (user_stream_id || `${user_id}_stream`).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 128)
     const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
     const digitalHumanId = digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97'
 
@@ -325,6 +343,18 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     }
 
     console.log('📤 CreateAgentInstance request:', JSON.stringify(instanceConfig, null, 2))
+    console.log('🧪 CreateAgentInstance identifiers:', {
+      userId: user_id,
+      agentUserId,
+      agentStreamId,
+      userStreamId,
+      lengths: {
+        userId: String(user_id || '').length,
+        agentUserId: agentUserId.length,
+        agentStreamId: agentStreamId.length,
+        userStreamId: userStreamId.length
+      }
+    })
     const agentResult = await makeZegoRequest('CreateAgentInstance', instanceConfig, 'aiagent')
     console.log('📥 CreateAgentInstance response:', JSON.stringify(agentResult, null, 2))
 
