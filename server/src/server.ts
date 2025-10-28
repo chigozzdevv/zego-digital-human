@@ -27,8 +27,8 @@ let REGISTERED_AGENT_ID: string | null = null
 // Agent configuration
 const AGENT_CONFIG = {
   LLM: {
-    Url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-    ApiKey: 'zego_test',
+    Url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+    ApiKey: CONFIG.DASHSCOPE_API_KEY,
     Model: 'qwen-plus',
     SystemPrompt: 'You are a professional AI interviewer conducting a job interview. Be conversational, encouraging, and ask follow-up questions when appropriate. Keep responses concise and interview-focused. Speak naturally as if you are a real interviewer.',
     Temperature: 0.7,
@@ -38,7 +38,7 @@ const AGENT_CONFIG = {
   TTS: {
     Vendor: 'CosyVoice',
     Params: {
-      app: { api_key: 'zego_test' },
+      app: { api_key: CONFIG.DASHSCOPE_API_KEY },
       payload: {
         model: 'cosyvoice-v2',
         parameters: {
