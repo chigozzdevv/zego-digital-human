@@ -218,20 +218,22 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     }
 
     const agentId = await registerAgent()
-    const userStreamId = (user_stream_id || `${user_id}_stream`).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 128)
+    const userStreamId = (user_stream_id || `${user_id}_stream`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .slice(0, 128)
     const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
 
     // Prepare CreateAgentInstance payloads (fallbacks for RTC schema differences)
-    const sanitizedUserId = String(user_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
+    const sanitizedUserId = String(user_id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
 
     const buildInstancePayload = (uid: string) => {
-      const normalizedUserId = String(uid).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
+      const normalizedUserId = String(uid).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
       const rtc = {
-        RoomID: room_id,
-        UserID: normalizedUserId,
-        AgentUserID: agentUserId,
-        AgentStreamID: agentStreamId,
-        UserStreamID: userStreamId
+        RoomId: room_id,
+        AgentUserId: agentUserId,
+        AgentStreamId: agentStreamId,
+        UserStreamId: userStreamId
       }
 
       return {
@@ -241,14 +243,6 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
           SyncMode: 1,
           Messages: [],
           WindowSize: 10
-        },
-        CallbackConfig: {
-          ASRResult: 1,
-          LLMResult: 1,
-          Exception: 1,
-          Interrupted: 1,
-          UserSpeakAction: 1,
-          AgentSpeakAction: 1
         },
         AdvancedConfig: {
           InterruptMode: 0
@@ -326,7 +320,10 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    const userStreamId = (user_stream_id || `${user_id}_stream`).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 128)
+    const userStreamId = (user_stream_id || `${user_id}_stream`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .slice(0, 128)
     const { agentUserId, agentStreamId } = buildAgentIdentifiers(room_id)
     const digitalHumanId = digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97'
 
@@ -334,16 +331,15 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
 
     const agentId = await registerAgent()
 
-    const sanitizedUserIdDH = String(user_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
+    const sanitizedUserIdDH = String(user_id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'user' + shortHash(user_id, 8)
 
     const buildInstancePayloadDH = (uid: string) => {
-      const normalizedUserId = uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
+      const normalizedUserId = uid.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || `user${shortHash(uid, 8)}`
       const rtc = {
-        RoomID: room_id,
-        UserID: normalizedUserId,
-        AgentUserID: agentUserId,
-        AgentStreamID: agentStreamId,
-        UserStreamID: userStreamId
+        RoomId: room_id,
+        AgentUserId: agentUserId,
+        AgentStreamId: agentStreamId,
+        UserStreamId: userStreamId
       }
 
       return {
@@ -353,14 +349,6 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
           SyncMode: 1,
           Messages: [],
           WindowSize: 10
-        },
-        CallbackConfig: {
-          ASRResult: 1,
-          LLMResult: 1,
-          Exception: 1,
-          Interrupted: 1,
-          UserSpeakAction: 1,
-          AgentSpeakAction: 1
         },
         AdvancedConfig: {
           InterruptMode: 0
@@ -383,30 +371,79 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         userStreamId: userStreamId.length
       }
     })
-    let agentResult: any = null
-    for (let i = 0; i < payloadAttempts.length; i++) {
-      const attemptBody = payloadAttempts[i]
-      console.log(`📤 CreateAgentInstance attempt #${i + 1}:`, JSON.stringify(attemptBody, null, 2))
-      try {
-        agentResult = await makeZegoRequest('CreateAgentInstance', attemptBody, 'aiagent')
-        console.log(`📥 CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(agentResult, null, 2))
-        if (agentResult?.Code === 0) break
-      } catch (e: any) {
-        console.warn(`⚠️ CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
+    const requestedConfigId = typeof req.body?.digital_human_config_id === 'string' && req.body.digital_human_config_id.trim().length > 0
+      ? req.body.digital_human_config_id.trim()
+      : undefined
+    const requestedEncode = typeof req.body?.digital_human_encode === 'string' && req.body.digital_human_encode.trim().length > 0
+      ? req.body.digital_human_encode.trim()
+      : undefined
+
+    const digitalHumanPayload = {
+      ...payloadAttempts[0],
+      DigitalHuman: {
+        DigitalHumanId: digitalHumanId,
+        ConfigId: requestedConfigId || 'mobile',
+        ...(requestedEncode ? { EncodeCode: requestedEncode } : {})
       }
     }
 
-    if (!agentResult || agentResult.Code !== 0) {
-      console.error('❌ CreateAgentInstance failed. Message:', agentResult.Message)
-      res.status(400).json({
-        error: agentResult.Message || 'Failed to create AI agent instance',
-        code: agentResult.Code,
-        requestId: agentResult.RequestId
+    let agentResult: any = null
+    let usingDigitalHumanAction = false
+
+    try {
+      console.log('📤 CreateDigitalHumanAgentInstance request:', JSON.stringify(digitalHumanPayload, null, 2))
+      const dhResponse = await makeZegoRequest('CreateDigitalHumanAgentInstance', digitalHumanPayload, 'aiagent')
+      console.log('📥 CreateDigitalHumanAgentInstance response:', JSON.stringify(dhResponse, null, 2))
+      if (dhResponse?.Code === 0) {
+        agentResult = dhResponse
+        usingDigitalHumanAction = true
+      } else {
+        console.warn('⚠️ CreateDigitalHumanAgentInstance returned non-zero code, falling back to CreateAgentInstance flow.', {
+          code: dhResponse?.Code,
+          message: dhResponse?.Message
+        })
+      }
+    } catch (err: any) {
+      console.warn('⚠️ CreateDigitalHumanAgentInstance error, falling back to CreateAgentInstance flow:', err?.message || err)
+    }
+
+    if (!usingDigitalHumanAction) {
+      for (let i = 0; i < payloadAttempts.length; i++) {
+        const attemptBody = payloadAttempts[i]
+        console.log(`📤 CreateAgentInstance attempt #${i + 1}:`, JSON.stringify(attemptBody, null, 2))
+        try {
+          agentResult = await makeZegoRequest('CreateAgentInstance', attemptBody, 'aiagent')
+          console.log(`📥 CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(agentResult, null, 2))
+          if (agentResult?.Code === 0) break
+        } catch (e: any) {
+          console.warn(`⚠️ CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
+        }
+      }
+
+      if (!agentResult || agentResult.Code !== 0) {
+        console.error('❌ CreateAgentInstance failed. Message:', agentResult?.Message)
+        res.status(400).json({
+          error: agentResult?.Message || 'Failed to create AI agent instance',
+          code: agentResult?.Code,
+          requestId: agentResult?.RequestId
+        })
+        return
+      }
+
+      console.log('✅ AI Agent instance created:', agentResult.Data?.AgentInstanceId)
+    } else {
+      console.log('✅ Digital human agent instance created via unified API:', agentResult.Data?.AgentInstanceId)
+      res.json({
+        success: true,
+        agentInstanceId: agentResult.Data?.AgentInstanceId,
+        agentUserId,
+        agentStreamId,
+        userStreamId,
+        digitalHumanConfig: agentResult.Data?.DigitalHumanConfig || null,
+        digitalHumanId
       })
       return
     }
-
-    console.log('✅ AI Agent instance created:', agentResult.Data?.AgentInstanceId)
 
     // Step 2: Verify digital human exists in account
     try {
