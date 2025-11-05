@@ -236,7 +236,6 @@ export const useInterview = () => {
               dispatch({ type: 'SET_TRANSCRIPT', payload: '' })
               dispatch({ type: 'SET_AGENT_STATUS', payload: 'thinking' })
 
-              setTimeout(() => askNextQuestion(), 3000)
               asrSeqMap.current.delete(mid)
             }
           }
@@ -278,6 +277,8 @@ export const useInterview = () => {
             }
             llmBuffers.current.delete(MessageId)
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
+            // Now that AI finished responding, ask the next question with a natural pause
+            setTimeout(() => askNextQuestion(), 1000)
           } else {
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
@@ -437,6 +438,15 @@ export const useInterview = () => {
       dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
     }
   }, [state.isConnected, state.isRecording])
+
+  // Auto-gate microphone based on agent speaking/listening state
+  useEffect(() => {
+    if (!state.isConnected) return
+    const micShouldBeOn = state.agentStatus === 'listening'
+    zegoService.current.enableMicrophone(micShouldBeOn).then((ok) => {
+      if (ok) dispatch({ type: 'SET_RECORDING', payload: micShouldBeOn })
+    }).catch(() => {})
+  }, [state.agentStatus, state.isConnected])
 
   const toggleVoiceSettings = useCallback(() => {
     if (!state.session) return
