@@ -240,7 +240,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     >
       <div
         id="remoteSteamView"
-        className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300 z-10 ${videoReady && isVideoEnabled ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 z-10 ${videoReady && isVideoEnabled ? 'opacity-100' : 'opacity-0'}`}
       />
 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent z-0" />

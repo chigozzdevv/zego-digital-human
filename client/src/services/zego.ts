@@ -89,6 +89,7 @@ export class ZegoService {
         const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
         for (const stream of streamList) {
           const streamId = stream.streamID
+          try { console.log('roomStreamUpdate ADD:', streamId) } catch {}
           if (userStreamId && streamId === userStreamId) continue
           if (typeof streamId === 'string' && streamId.startsWith('zegoprobe')) continue
           if (this.isStreamPlaying(streamId)) continue
@@ -103,9 +104,35 @@ export class ZegoService {
             } catch {}
             const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
             if (remoteView) {
-              try { remoteView.playAudio() } catch {}
+              // Ensure audio can start under autoplay policies; suppress unhandled rejections
+              Promise
+                .resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
+                .catch(() => {})
               this.remoteViews.set(streamId, remoteView)
               this.markStreamPlaying(streamId)
+              // Fallback: if a video track already exists, try render immediately
+              try {
+                const hasVideo = (mediaStream.getVideoTracks?.() || []).length > 0
+                if (hasVideo) {
+                  const playNow = async (retries = 4) => {
+                    const el = document.getElementById('remoteSteamView')
+                    if (!el) {
+                      if (retries > 0) return setTimeout(() => playNow(retries - 1), 150)
+                      return
+                    }
+                    try {
+                      const r = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+                      if (r === false) {
+                        const r2 = await Promise.resolve(remoteView.playVideo(el, { enableAutoplayDialog: false }))
+                        if (r2 === true) this.setVideoReady(true)
+                      } else {
+                        this.setVideoReady(true)
+                      }
+                    } catch {}
+                  }
+                  playNow()
+                }
+              } catch {}
             }
           } catch (error) {
             console.error('Failed starting remote stream via RemoteView:', streamId, error)
@@ -116,6 +143,7 @@ export class ZegoService {
       if (updateType === 'DELETE') {
         const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
         for (const stream of streamList) {
+          try { console.log('roomStreamUpdate DELETE:', stream.streamID) } catch {}
           if (userStreamId && stream.streamID === userStreamId) continue
           try { this.zg!.stopPlayingStream(stream.streamID) } catch {}
           const rv = this.remoteViews.get(stream.streamID)
@@ -128,6 +156,7 @@ export class ZegoService {
     })
 
     this.zg.on('remoteCameraStatusUpdate', (streamID: string, status: 'OPEN' | 'MUTE') => {
+      try { console.log('remoteCameraStatusUpdate:', streamID, status) } catch {}
       const rv = this.remoteViews.get(streamID)
       if (!rv) return
       if (status !== 'OPEN') { this.setVideoReady(false); return }
@@ -262,7 +291,10 @@ export class ZegoService {
   private updateVoiceState(): void {
     try {
       if (this.agentAudioStreamId && this.zg) {
-        ;(this.zg as any).mutePlayStreamAudio(this.agentAudioStreamId, !this.voiceEnabled)
+        // Only mute/unmute streams that are actually playing to avoid activation errors
+        if (this.isStreamPlaying(this.agentAudioStreamId)) {
+          try { (this.zg as any).mutePlayStreamAudio(this.agentAudioStreamId, !this.voiceEnabled) } catch {}
+        }
       } else if (this.zg) {
         for (const sid of this.remoteViews.keys()) {
           try { (this.zg as any).mutePlayStreamAudio(sid, !this.voiceEnabled) } catch {}
