@@ -177,6 +177,15 @@ export class ZegoService {
     this.dhPlayRetryCount = 0
   }
 
+  private async waitForFirstFrame(maxWaitMs = 4000, stepMs = 150): Promise<boolean> {
+    const start = Date.now()
+    while (Date.now() - start < maxWaitMs) {
+      if (this.videoElement && this.videoElement.videoWidth > 0) return true
+      await new Promise(res => setTimeout(res, stepMs))
+    }
+    return false
+  }
+
   private scheduleDigitalHumanRetry(delay = 1500): void {
     if (!this.dhVideoStreamId) return
     if (this.isStreamPlaying(this.dhVideoStreamId)) return
@@ -421,7 +430,10 @@ export class ZegoService {
 
       if (result?.state === 'PLAYING') {
         this.attachVideoElementToContainer()
-        this.setVideoReady(true)
+        ;(async () => {
+          const gotFrame = await this.waitForFirstFrame(3500)
+          this.setVideoReady(!!gotFrame)
+        })()
         if (result?.streamID) this.markStreamPlaying(result.streamID)
         this.clearDigitalHumanRetry()
         if (this.voiceEnabled) this.updateVoiceState()
@@ -851,7 +863,8 @@ export class ZegoService {
           console.warn('⚠️ Video element play() failed:', playError)
         }
 
-        this.setVideoReady(true)
+        const gotFrame = await this.waitForFirstFrame()
+        this.setVideoReady(!!gotFrame)
         this.clearDigitalHumanRetry()
         this.markStreamPlaying(streamId)
       }
@@ -965,9 +978,8 @@ export class ZegoService {
       }
 
       console.log('✅ Digital human video stream playing successfully:', streamId)
-      // video ready
-
-      this.setVideoReady(true)
+      const gotFrame = await this.waitForFirstFrame()
+      this.setVideoReady(!!gotFrame)
       this.clearDigitalHumanRetry()
       this.markStreamPlaying(streamId)
 
