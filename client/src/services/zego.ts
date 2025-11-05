@@ -96,6 +96,11 @@ export class ZegoService {
             const playOption = { jitterBufferTarget: 500 } as any
             const mediaStream = await this.zg!.startPlayingStream(streamId, playOption)
             if (!mediaStream) continue
+            try {
+              const v = mediaStream.getVideoTracks()?.length || 0
+              const a = mediaStream.getAudioTracks()?.length || 0
+              console.log('Remote media tracks:', { streamId, videoTracks: v, audioTracks: a })
+            } catch {}
             const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
             if (remoteView) {
               try { remoteView.playAudio() } catch {}
@@ -125,11 +130,27 @@ export class ZegoService {
     this.zg.on('remoteCameraStatusUpdate', (streamID: string, status: 'OPEN' | 'MUTE') => {
       const rv = this.remoteViews.get(streamID)
       if (!rv) return
-      if (status === 'OPEN') {
-        try { rv.playVideo('remoteSteamView', { enableAutoplayDialog: false }); this.setVideoReady(true) } catch (e) { console.warn('playVideo failed:', e) }
-      } else {
-        this.setVideoReady(false)
+      if (status !== 'OPEN') { this.setVideoReady(false); return }
+
+      const tryPlay = async (retries = 6) => {
+        const el = document.getElementById('remoteSteamView')
+        if (!el) {
+          if (retries > 0) return setTimeout(() => tryPlay(retries - 1), 150)
+          console.warn('remoteSteamView container not found'); this.setVideoReady(false); return
+        }
+        try {
+          const res = await Promise.resolve(rv.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+          if (res === false) {
+            const res2 = await Promise.resolve(rv.playVideo(el, { enableAutoplayDialog: false }))
+            this.setVideoReady(res2 === true)
+          } else {
+            this.setVideoReady(true)
+          }
+        } catch (e) {
+          console.warn('playVideo failed:', e); this.setVideoReady(false)
+        }
       }
+      tryPlay()
     })
 
     this.zg.on('playerStateUpdate', (result: any) => {

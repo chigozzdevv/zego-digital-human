@@ -443,6 +443,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const digitalHumanConfig: any = {
       DigitalHumanConfig: {
         DigitalHumanId: digitalHumanId,
+        ConfigId: 'web',
         ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : {}),
         Layout: {
           Top: reqLayout?.Top ?? 0,
