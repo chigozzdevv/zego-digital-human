@@ -22,6 +22,7 @@ export class ZegoService {
   private dhPlayRetryTimer: ReturnType<typeof setTimeout> | null = null
   private dhPlayRetryCount = 0
   private readonly MAX_DH_PLAY_RETRY = 6
+  private playingStreamIds = new Set<string>()
 
   static getInstance(): ZegoService {
     if (!ZegoService.instance) {
@@ -178,6 +179,7 @@ export class ZegoService {
 
   private scheduleDigitalHumanRetry(delay = 1500): void {
     if (!this.dhVideoStreamId) return
+    if (this.isStreamPlaying(this.dhVideoStreamId)) return
     if (this.dhPlayRetryCount >= this.MAX_DH_PLAY_RETRY) {
       console.warn('⚠️ Reached max retry attempts for digital human stream playback')
       return
@@ -297,6 +299,11 @@ export class ZegoService {
           const streamId = stream.streamID
           console.log('🎯 Processing remote stream:', streamId)
 
+          if (this.isStreamPlaying(streamId)) {
+            console.log('✅ Stream already playing, skipping duplicate play:', streamId)
+            continue
+          }
+
           // Check if this matches our expected stream(s)
           const matchesVideo = this.dhVideoStreamId && streamId === this.dhVideoStreamId
           const matchesAudio = this.agentAudioStreamId && streamId === this.agentAudioStreamId
@@ -415,10 +422,12 @@ export class ZegoService {
       if (result?.state === 'PLAYING') {
         this.attachVideoElementToContainer()
         this.setVideoReady(true)
+        if (result?.streamID) this.markStreamPlaying(result.streamID)
         this.clearDigitalHumanRetry()
         if (this.voiceEnabled) this.updateVoiceState()
       } else if (result?.state === 'NO_PLAY' || result?.state === 'PLAY_STOP' || result?.state === 'PLAY_FAIL') {
         this.setVideoReady(false)
+        if (result?.streamID) this.unmarkStreamPlaying(result.streamID)
         this.scheduleDigitalHumanRetry()
       } else if (result?.state === 'PLAY_REQUESTING' && errorCode !== 0) {
         this.scheduleDigitalHumanRetry()
@@ -506,44 +515,57 @@ export class ZegoService {
 
         if (isUnifiedStream && this.dhVideoStreamId) {
           console.log('🔗 Attempting UNIFIED stream playback:', this.dhVideoStreamId)
-          try {
-            const success = await this.playUnifiedStream(this.dhVideoStreamId)
-            if (success) {
-              console.log('✅ Unified stream connected!')
-              videoSuccess = true
-            } else {
-              console.warn('⚠️ Unified stream returned false')
-            }
-          } catch (err) {
-            console.warn('⚠️ Failed to play unified stream:', err)
-          }
-        }
-        else {
-          if (this.agentAudioStreamId) {
-            console.log('🔊 Attempting agent audio stream:', this.agentAudioStreamId)
+          if (this.isStreamPlaying(this.dhVideoStreamId)) {
+            console.log('✅ Unified stream already playing')
+            videoSuccess = true
+          } else {
             try {
-              const success = await this.playAgentAudioStream(this.agentAudioStreamId)
+              const success = await this.playUnifiedStream(this.dhVideoStreamId)
               if (success) {
-                console.log('✅ Agent audio stream connected!')
+                console.log('✅ Unified stream connected!')
+                videoSuccess = true
               } else {
-                console.warn('⚠️ Agent audio stream returned false')
+                console.warn('⚠️ Unified stream returned false')
               }
             } catch (err) {
-              console.warn('⚠️ Agent audio stream not ready yet:', err)
+              console.warn('⚠️ Failed to play unified stream:', err)
+            }
+          }
+        } else {
+          if (this.agentAudioStreamId) {
+            console.log('🔊 Attempting agent audio stream:', this.agentAudioStreamId)
+            if (this.isStreamPlaying(this.agentAudioStreamId)) {
+              console.log('✅ Agent audio already playing')
+            } else {
+              try {
+                const success = await this.playAgentAudioStream(this.agentAudioStreamId)
+                if (success) {
+                  console.log('✅ Agent audio stream connected!')
+                } else {
+                  console.warn('⚠️ Agent audio stream returned false')
+                }
+              } catch (err) {
+                console.warn('⚠️ Agent audio stream not ready yet:', err)
+              }
             }
           }
           if (this.dhVideoStreamId) {
             console.log('📹 Attempting digital human video stream:', this.dhVideoStreamId)
-            try {
-              const success = await this.playDigitalHumanVideoStream(this.dhVideoStreamId)
-              if (success) {
-                console.log('✅ Digital human video stream connected!')
-                videoSuccess = true
-              } else {
-                console.warn('⚠️ Digital human video stream returned false')
+            if (this.isStreamPlaying(this.dhVideoStreamId)) {
+              console.log('✅ Digital human video already playing')
+              videoSuccess = true
+            } else {
+              try {
+                const success = await this.playDigitalHumanVideoStream(this.dhVideoStreamId)
+                if (success) {
+                  console.log('✅ Digital human video stream connected!')
+                  videoSuccess = true
+                } else {
+                  console.warn('⚠️ Digital human video stream returned false')
+                }
+              } catch (err) {
+                console.warn('⚠️ Failed to play digital human video stream:', err)
               }
-            } catch (err) {
-              console.warn('⚠️ Failed to play digital human video stream:', err)
             }
           }
         }
@@ -794,7 +816,9 @@ export class ZegoService {
 
     try {
       console.log('🔗 Calling zg.startPlayingStream (ONCE for unified stream)...')
-      const mediaStream = await this.zg.startPlayingStream(streamId)
+      if (this.isStreamPlaying(streamId)) return true
+      const playOption = { jitterBufferTarget: 500 }
+      const mediaStream = await this.zg.startPlayingStream(streamId, playOption as any)
 
       if (!mediaStream) {
         console.warn('⚠️ No media stream returned for:', streamId)
@@ -829,6 +853,7 @@ export class ZegoService {
 
         this.setVideoReady(true)
         this.clearDigitalHumanRetry()
+        this.markStreamPlaying(streamId)
       }
 
       if (hasAudio) {
@@ -864,7 +889,13 @@ export class ZegoService {
       })
 
       return hasVideo || hasAudio
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.code === 1103049 || e?.errorCode === 1103049) {
+        console.warn('ℹ️ Unified stream already playing, treating as success:', streamId)
+        this.markStreamPlaying(streamId)
+        this.setVideoReady(true)
+        return true
+      }
       console.error('❌ Failed to play unified stream:', streamId)
       console.error('❌ Error details:', e)
       this.setVideoReady(false)
@@ -888,7 +919,9 @@ export class ZegoService {
 
     try {
       console.log('🎬 Calling zg.startPlayingStream...')
-      const mediaStream = await this.zg.startPlayingStream(streamId)
+      if (this.isStreamPlaying(streamId)) return true
+      const playOption = { jitterBufferTarget: 500 }
+      const mediaStream = await this.zg.startPlayingStream(streamId, playOption as any)
 
       if (!mediaStream) {
         console.warn('⚠️ No media stream returned for:', streamId)
@@ -936,9 +969,16 @@ export class ZegoService {
 
       this.setVideoReady(true)
       this.clearDigitalHumanRetry()
+      this.markStreamPlaying(streamId)
 
       return true
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.code === 1103049 || e?.errorCode === 1103049) {
+        console.warn('ℹ️ Video stream already playing, treating as success:', streamId)
+        this.markStreamPlaying(streamId)
+        this.setVideoReady(true)
+        return true
+      }
       console.error('❌ Failed to play digital human video stream:', streamId)
       console.error('❌ Error details:', e)
       this.setVideoReady(false)
@@ -950,7 +990,9 @@ export class ZegoService {
     if (!this.zg || !this.audioElement) return false
     try {
       console.log('🔊 Starting agent audio stream playback:', streamId)
-      const mediaStream = await this.zg.startPlayingStream(streamId)
+      if (this.isStreamPlaying(streamId)) return true
+      const playOption = { jitterBufferTarget: 500 }
+      const mediaStream = await this.zg.startPlayingStream(streamId, playOption as any)
       if (!mediaStream) {
         console.warn('⚠️ No media stream returned for:', streamId)
         return false
@@ -968,8 +1010,14 @@ export class ZegoService {
       try { await this.audioElement.play() } catch {}
       console.log('✅ Agent audio stream playing (element.srcObject):', streamId, 'Voice enabled:', this.voiceEnabled)
 
+      this.markStreamPlaying(streamId)
       return true
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.code === 1103049 || e?.errorCode === 1103049) {
+        console.warn('ℹ️ Audio stream already playing, treating as success:', streamId)
+        this.markStreamPlaying(streamId)
+        return true
+      }
       console.error('❌ Failed to play agent audio stream:', streamId, e)
       return false
     }
@@ -1044,6 +1092,21 @@ export class ZegoService {
 
       console.log('🗑️ ZEGO service destroyed')
     }
+  }
+
+  private isStreamPlaying(streamId: string | null | undefined): boolean {
+    if (!streamId) return false
+    return this.playingStreamIds.has(streamId)
+  }
+
+  private markStreamPlaying(streamId: string | null | undefined): void {
+    if (!streamId) return
+    this.playingStreamIds.add(streamId)
+  }
+
+  private unmarkStreamPlaying(streamId: string | null | undefined): void {
+    if (!streamId) return
+    this.playingStreamIds.delete(streamId)
   }
 }
 
