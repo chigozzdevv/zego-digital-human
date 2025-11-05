@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useDigitalHuman } from '../../hooks/useDigitalHuman'
-import { Bot, Volume2, VolumeX, Video, VideoOff, Circle } from 'lucide-react'
+import { Volume2, VolumeX, Video, VideoOff, Circle } from 'lucide-react'
 
 interface DigitalHumanProps {
   isConnected: boolean
@@ -221,7 +221,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     return () => clearInterval(interval)
   }, [showDebug, isConnected, isVideoEnabled, isAudioEnabled, videoReady, agentStatus])
 
-  const showPlaceholder = !isConnected || !isVideoEnabled || !videoReady
+  const showPlaceholder = false
 
   const statusConfig = {
     listening: { color: 'bg-emerald-500', text: 'Listening', pulse: true },
@@ -249,48 +249,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent z-0" />
 
-      {showPlaceholder && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.3 }}
-          className="flex flex-col items-center justify-center text-white z-30"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-            className="relative mb-8"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-violet-600 rounded-full blur-2xl opacity-50 animate-pulse" />
-            <div className="relative w-32 h-32 bg-gradient-to-br from-blue-600 to-violet-600 rounded-full flex items-center justify-center shadow-2xl">
-              <Bot className="w-16 h-16 text-white" strokeWidth={1.5} />
-            </div>
-          </motion.div>
-
-          <motion.h3
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent"
-          >
-            AI Interviewer
-          </motion.h3>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="text-slate-300 text-center max-w-md text-sm leading-relaxed"
-          >
-            {!isConnected
-              ? 'Your digital interviewer will appear when you start the session'
-              : 'Video display is currently disabled'
-            }
-          </motion.p>
-        </motion.div>
-      )}
+      {showPlaceholder && null}
 
       <AnimatePresence>
         {currentQuestion && agentStatus === 'speaking' && (
