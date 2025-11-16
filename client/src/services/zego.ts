@@ -20,6 +20,7 @@ export class ZegoService {
   private agentAudioStreamId: string | null = null
   private voiceEnabled = false
   private remoteViews = new Map<string, any>()
+  private streamTracks = new Map<string, { videoTracks: number; audioTracks: number }>()
   private playingStreamIds = new Set<string>()
   private audioActivated = new Set<string>()
 
@@ -102,6 +103,7 @@ export class ZegoService {
               const v = mediaStream.getVideoTracks()?.length || 0
               const a = mediaStream.getAudioTracks()?.length || 0
               console.log('Remote media tracks:', { streamId, videoTracks: v, audioTracks: a })
+              this.streamTracks.set(streamId, { videoTracks: v, audioTracks: a })
             } catch {}
             const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
             if (remoteView) {
@@ -150,6 +152,7 @@ export class ZegoService {
           const rv = this.remoteViews.get(stream.streamID)
           if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch {} }
           this.remoteViews.delete(stream.streamID)
+          this.streamTracks.delete(stream.streamID)
           this.unmarkStreamPlaying(stream.streamID)
           this.audioActivated.delete(stream.streamID)
           if (this.dhVideoStreamId === stream.streamID) this.setVideoReady(false)
@@ -330,12 +333,52 @@ export class ZegoService {
       this.setVideoReady(false)
       this.dhVideoStreamId = null
       this.voiceEnabled = false
+      this.streamTracks.clear()
     }
   }
 
   private isStreamPlaying(streamId: string | null | undefined): boolean { return !!streamId && this.playingStreamIds.has(streamId) }
   private markStreamPlaying(streamId: string | null | undefined): void { if (streamId) this.playingStreamIds.add(streamId) }
   private unmarkStreamPlaying(streamId: string | null | undefined): void { if (streamId) this.playingStreamIds.delete(streamId) }
+
+  getStreamsDebug(): Array<{
+    streamId: string
+    videoTracks: number
+    audioTracks: number
+    isDigitalHumanVideo: boolean
+    isAgentAudio: boolean
+    isUserStream: boolean
+    isPlaying: boolean
+    audioActivated: boolean
+  }> {
+    const result: Array<{
+      streamId: string
+      videoTracks: number
+      audioTracks: number
+      isDigitalHumanVideo: boolean
+      isAgentAudio: boolean
+      isUserStream: boolean
+      isPlaying: boolean
+      audioActivated: boolean
+    }> = []
+
+    const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
+
+    for (const [streamId, tracks] of this.streamTracks.entries()) {
+      result.push({
+        streamId,
+        videoTracks: tracks.videoTracks,
+        audioTracks: tracks.audioTracks,
+        isDigitalHumanVideo: this.dhVideoStreamId === streamId,
+        isAgentAudio: this.agentAudioStreamId === streamId,
+        isUserStream: userStreamId === streamId,
+        isPlaying: this.playingStreamIds.has(streamId),
+        audioActivated: this.audioActivated.has(streamId)
+      })
+    }
+
+    return result
+  }
 }
 
 if (typeof window !== 'undefined') {
@@ -343,7 +386,15 @@ if (typeof window !== 'undefined') {
     getService: () => ZegoService.getInstance(),
     getState: () => {
       const s = ZegoService.getInstance()
-      return { isInRoom: s.isInRoom(), isVideoReady: s.isVideoReady(), roomId: s.getCurrentRoomId(), userId: s.getCurrentUserId(), dhVideoStreamId: (s as any).dhVideoStreamId, agentAudioStreamId: (s as any).agentAudioStreamId }
+      return {
+        isInRoom: s.isInRoom(),
+        isVideoReady: s.isVideoReady(),
+        roomId: s.getCurrentRoomId(),
+        userId: s.getCurrentUserId(),
+        dhVideoStreamId: (s as any).dhVideoStreamId,
+        agentAudioStreamId: (s as any).agentAudioStreamId,
+        streams: s.getStreamsDebug()
+      }
     }
   }
 }

@@ -208,7 +208,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
           } : null,
           zegoService: {
             isVideoReady: service.isVideoReady(),
-            isInRoom: service.isInRoom()
+            isInRoom: service.isInRoom(),
+            streams: service.getStreamsDebug ? service.getStreamsDebug() : []
           }
         })
       } catch (error) {
