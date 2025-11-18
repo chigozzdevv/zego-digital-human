@@ -115,15 +115,20 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
         const { ZegoService } = await import('../../services/zego')
         const service = ZegoService.getInstance()
         service.ensureVideoContainer()
-        const videoEl = service.getVideoElement()
-        if (videoEl) {
-          videoRef.current = videoEl
-          if (!isVideoEnabled) {
-            setVideoReady(false)
-          } else if (service.isVideoReady() || (!videoEl.paused && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0)) {
-            setVideoReady(true)
-          } else {
-            setVideoReady(false)
+
+        // Look for the video element that ZEGO creates dynamically
+        const container = document.getElementById('remoteSteamView')
+        if (container) {
+          const videoEl = container.querySelector('video') as HTMLVideoElement
+          if (videoEl) {
+            videoRef.current = videoEl
+            if (!isVideoEnabled) {
+              setVideoReady(false)
+            } else if (service.isVideoReady() || (!videoEl.paused && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0)) {
+              setVideoReady(true)
+            } else {
+              setVideoReady(false)
+            }
           }
         }
       } catch (error) {
@@ -132,38 +137,69 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     }
 
     updateReadyState()
+
+    // Poll for video element since ZEGO creates it dynamically
+    const interval = setInterval(updateReadyState, 500)
+    return () => clearInterval(interval)
   }, [isVideoEnabled])
 
   useEffect(() => {
-    const videoEl = videoRef.current
-    if (!videoEl) return
+    // Find the dynamically created video element
+    const findAndAttachListeners = () => {
+      const container = document.getElementById('remoteSteamView')
+      if (!container) return null
 
-    const markReady = () => {
-      if (isVideoEnabled && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0) {
-        setVideoReady(true)
+      const videoEl = container.querySelector('video') as HTMLVideoElement
+      if (!videoEl) return null
+
+      videoRef.current = videoEl
+      return videoEl
+    }
+
+    const videoEl = findAndAttachListeners()
+    if (!videoEl) {
+      // Retry finding the video element
+      const retryInterval = setInterval(() => {
+        const found = findAndAttachListeners()
+        if (found) {
+          clearInterval(retryInterval)
+          setupListeners(found)
+        }
+      }, 300)
+
+      return () => clearInterval(retryInterval)
+    }
+
+    const setupListeners = (video: HTMLVideoElement) => {
+      const markReady = () => {
+        if (isVideoEnabled && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+          setVideoReady(true)
+        }
+      }
+      const handleWaiting = () => setVideoReady(false)
+
+      video.addEventListener('loadeddata', markReady)
+      video.addEventListener('canplay', markReady)
+      video.addEventListener('play', markReady)
+      video.addEventListener('resize', markReady)
+      video.addEventListener('waiting', handleWaiting)
+      video.addEventListener('stalled', handleWaiting)
+      video.addEventListener('emptied', handleWaiting)
+
+      markReady()
+
+      return () => {
+        video.removeEventListener('loadeddata', markReady)
+        video.removeEventListener('canplay', markReady)
+        video.removeEventListener('play', markReady)
+        video.removeEventListener('resize', markReady)
+        video.removeEventListener('waiting', handleWaiting)
+        video.removeEventListener('stalled', handleWaiting)
+        video.removeEventListener('emptied', handleWaiting)
       }
     }
-    const handleWaiting = () => setVideoReady(false)
 
-    videoEl.addEventListener('loadeddata', markReady)
-    videoEl.addEventListener('canplay', markReady)
-    videoEl.addEventListener('play', markReady)
-    videoEl.addEventListener('resize', markReady)
-    videoEl.addEventListener('waiting', handleWaiting)
-    videoEl.addEventListener('stalled', handleWaiting)
-    videoEl.addEventListener('emptied', handleWaiting)
-
-    markReady()
-
-    return () => {
-      videoEl.removeEventListener('loadeddata', markReady)
-      videoEl.removeEventListener('canplay', markReady)
-      videoEl.removeEventListener('play', markReady)
-      videoEl.removeEventListener('resize', markReady)
-      videoEl.removeEventListener('waiting', handleWaiting)
-      videoEl.removeEventListener('stalled', handleWaiting)
-      videoEl.removeEventListener('emptied', handleWaiting)
-    }
+    return setupListeners(videoEl)
   }, [isVideoEnabled])
 
   useEffect(() => {
@@ -182,29 +218,39 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
         const service = ZegoService.getInstance()
         const videoEl = service.getVideoElement()
 
+        const container = document.getElementById('remoteSteamView')
+        const dynamicVideoEl = container?.querySelector('video') as HTMLVideoElement
+
         setDebugInfo({
           isConnected,
           isVideoEnabled,
           isAudioEnabled,
           videoReady,
           agentStatus,
-          videoElement: videoEl ? {
-            readyState: videoEl.readyState,
-            videoWidth: videoEl.videoWidth,
-            videoHeight: videoEl.videoHeight,
-            paused: videoEl.paused,
-            muted: videoEl.muted,
-            currentTime: videoEl.currentTime,
-            hasSrcObject: !!videoEl.srcObject,
-            dataset: videoEl.dataset,
+          container: container ? {
+            exists: true,
+            childElementCount: container.childElementCount,
+            hasVideo: !!dynamicVideoEl,
+            innerHTML: container.innerHTML.substring(0, 200)
+          } : { exists: false },
+          videoElement: (dynamicVideoEl || videoEl) ? {
+            source: dynamicVideoEl ? 'ZEGO-created' : 'Service-reference',
+            readyState: (dynamicVideoEl || videoEl).readyState,
+            videoWidth: (dynamicVideoEl || videoEl).videoWidth,
+            videoHeight: (dynamicVideoEl || videoEl).videoHeight,
+            paused: (dynamicVideoEl || videoEl).paused,
+            muted: (dynamicVideoEl || videoEl).muted,
+            currentTime: (dynamicVideoEl || videoEl).currentTime,
+            hasSrcObject: !!(dynamicVideoEl || videoEl).srcObject,
             style: {
-              display: videoEl.style.display,
-              visibility: videoEl.style.visibility,
-              opacity: videoEl.style.opacity,
-              zIndex: videoEl.style.zIndex
+              display: (dynamicVideoEl || videoEl).style.display,
+              visibility: (dynamicVideoEl || videoEl).style.visibility,
+              opacity: (dynamicVideoEl || videoEl).style.opacity,
+              width: (dynamicVideoEl || videoEl).style.width,
+              height: (dynamicVideoEl || videoEl).style.height
             },
-            inDOM: document.body.contains(videoEl),
-            parentElement: videoEl.parentElement?.tagName
+            inDOM: document.body.contains(dynamicVideoEl || videoEl),
+            parentElement: (dynamicVideoEl || videoEl).parentElement?.tagName
           } : null,
           zegoService: {
             isVideoReady: service.isVideoReady(),
@@ -242,15 +288,25 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       <div
         id="remoteSteamView"
         className={`absolute inset-0 w-full h-full transition-opacity duration-300 z-10 ${videoReady && isVideoEnabled ? 'opacity-100' : 'opacity-0'}`}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%'
+        }}
       >
-        <video
-          id="digital-human-video"
-          className="w-full h-full object-cover"
-          autoPlay
-          playsInline
-          muted
-        />
+        {/* ZEGO RemoteStreamView will append its video element here */}
       </div>
+
+      <style>{`
+        #remoteSteamView video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          display: block !important;
+        }
+      `}</style>
 
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent z-0" />
 

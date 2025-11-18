@@ -64,7 +64,7 @@ export class ZegoService {
       this.audioElement.style.display = 'none'
       document.body.appendChild(this.audioElement)
     }
-    this.videoElement = document.getElementById('digital-human-video') as HTMLVideoElement
+    // Video element will be created by ZEGO RemoteStreamView
     this.setupMediaEventListeners()
   }
 
@@ -72,9 +72,7 @@ export class ZegoService {
     if (this.audioElement) {
       this.audioElement.addEventListener('error', (e) => console.error('Audio error:', e))
     }
-    if (this.videoElement) {
-      this.videoElement.addEventListener('error', (e) => console.error('Video error:', e))
-    }
+    // Video element error listeners will be added after ZEGO creates the video element
   }
 
   private setupEventListeners(): void {
@@ -117,26 +115,38 @@ export class ZegoService {
               // Fallback: if a video track already exists, try render immediately
               try {
                 const hasVideo = (mediaStream.getVideoTracks?.() || []).length > 0
+                console.log(`📹 Stream ${streamId} has video tracks:`, hasVideo)
                 if (hasVideo) {
-                  const playNow = async (retries = 4) => {
-                    const el = document.getElementById('remoteSteamView')
-                    if (!el) {
-                      if (retries > 0) return setTimeout(() => playNow(retries - 1), 150)
+                  const playNow = async (retries = 6) => {
+                    const container = document.getElementById('remoteSteamView')
+                    if (!container) {
+                      if (retries > 0) {
+                        console.log(`⏳ Waiting for remoteSteamView container (${retries} retries left)`)
+                        return setTimeout(() => playNow(retries - 1), 200)
+                      }
+                      console.warn('❌ remoteSteamView container not found for video playback')
                       return
                     }
                     try {
-                      const r = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
-                      if (r === false) {
-                        const r2 = await Promise.resolve(remoteView.playVideo(el, { enableAutoplayDialog: false }))
-                        if (r2 === true) this.setVideoReady(true)
-                      } else {
+                      console.log(`▶️ Attempting to play video in remoteSteamView for stream: ${streamId}`)
+                      const result = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+                      console.log(`📺 RemoteView.playVideo result:`, result)
+                      if (result !== false) {
+                        console.log('✅ Video playback successful, marking as ready')
                         this.setVideoReady(true)
+                        this.updateVideoElement()
+                      } else {
+                        console.warn('⚠️ RemoteView.playVideo returned false')
                       }
-                    } catch {}
+                    } catch (err) {
+                      console.warn('❌ Failed to play video in container:', err)
+                    }
                   }
                   playNow()
                 }
-              } catch {}
+              } catch (err) {
+                console.error('Error checking video tracks:', err)
+              }
             }
           } catch (error) {
             console.error('Failed starting remote stream via RemoteView:', streamId, error)
@@ -168,18 +178,18 @@ export class ZegoService {
       if (status !== 'OPEN') { this.setVideoReady(false); return }
 
       const tryPlay = async (retries = 6) => {
-        const el = document.getElementById('remoteSteamView')
-        if (!el) {
-          if (retries > 0) return setTimeout(() => tryPlay(retries - 1), 150)
+        const container = document.getElementById('remoteSteamView')
+        if (!container) {
+          if (retries > 0) return setTimeout(() => tryPlay(retries - 1), 200)
           console.warn('remoteSteamView container not found'); this.setVideoReady(false); return
         }
         try {
-          const res = await Promise.resolve(rv.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
-          if (res === false) {
-            const res2 = await Promise.resolve(rv.playVideo(el, { enableAutoplayDialog: false }))
-            this.setVideoReady(res2 === true)
-          } else {
+          const result = await Promise.resolve(rv.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+          if (result !== false) {
             this.setVideoReady(true)
+            this.updateVideoElement()
+          } else {
+            this.setVideoReady(false)
           }
         } catch (e) {
           console.warn('playVideo failed:', e); this.setVideoReady(false)
@@ -203,6 +213,32 @@ export class ZegoService {
   private setVideoReady(ready: boolean): void {
     this.videoReady = ready
     try { document.dispatchEvent(new CustomEvent('zego-digital-human-video-state', { detail: { ready } })) } catch {}
+  }
+
+  private updateVideoElement(): void {
+    // After ZEGO creates the video element, find it and update our reference
+    try {
+      const container = document.getElementById('remoteSteamView')
+      if (container) {
+        const videoEl = container.querySelector('video')
+        if (videoEl) {
+          this.videoElement = videoEl as HTMLVideoElement
+          console.log('📹 Video element found and updated:', {
+            width: videoEl.videoWidth,
+            height: videoEl.videoHeight,
+            readyState: videoEl.readyState,
+            paused: videoEl.paused
+          })
+          videoEl.addEventListener('error', (e) => console.error('Digital human video error:', e))
+        } else {
+          console.warn('⚠️ No video element found in remoteSteamView container')
+        }
+      } else {
+        console.warn('⚠️ remoteSteamView container not found')
+      }
+    } catch (e) {
+      console.warn('Failed to update video element reference:', e)
+    }
   }
 
   async joinRoom(roomId: string, userId: string): Promise<boolean> {
@@ -379,41 +415,26 @@ export class ZegoService {
         this.dhRemoteView = remoteView
 
         const attach = async (): Promise<void> => {
-          const videoEl = document.getElementById('digital-human-video')
           const container = document.getElementById('remoteSteamView')
-          if (!videoEl || !container) {
-            setTimeout(attach, 150)
+          if (!container) {
+            setTimeout(attach, 200)
             return
           }
-          const tryPlay = async (target: string | HTMLElement) => {
-            try {
-              return await Promise.resolve(remoteView.playVideo(target, { enableAutoplayDialog: false }))
-            } catch (error) {
-              console.warn('Digital human playVideo failed:', error)
-              return false
+
+          try {
+            // ZEGO's RemoteStreamView.playVideo expects a container element
+            const result = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+            if (result !== false) {
+              this.setVideoReady(true)
+              this.updateVideoElement()
+            } else {
+              console.warn('Digital human playVideo returned false')
+              this.setVideoReady(false)
             }
+          } catch (error) {
+            console.warn('Digital human playVideo failed:', error)
+            this.setVideoReady(false)
           }
-
-          const primary = await tryPlay('digital-human-video')
-          if (primary === true) {
-            this.setVideoReady(true)
-            return
-          }
-
-          const secondary = await tryPlay(videoEl as HTMLElement)
-          if (secondary === true) {
-            this.setVideoReady(true)
-            return
-          }
-
-          const fallback = await tryPlay('remoteSteamView')
-          if (fallback === true) {
-            this.setVideoReady(true)
-            return
-          }
-
-          const finalTry = await tryPlay(container as HTMLElement)
-          this.setVideoReady(finalTry === true)
         }
 
         attach()

@@ -343,9 +343,12 @@ export const useInterview = () => {
       }
 
       if (result.digitalHumanVideoStreamId) {
+        console.log('🎭 Configuring digital human video stream:', result.digitalHumanVideoStreamId)
         zegoService.current.setDigitalHumanStream(result.digitalHumanVideoStreamId)
         zegoService.current.setVoicePreference(defaultVoiceSettings.isEnabled)
-        console.log('Digital human video stream configured:', result.digitalHumanVideoStreamId)
+        console.log('✅ Digital human video stream configured')
+      } else {
+        console.warn('⚠️ No digital human video stream ID received from backend')
       }
 
       const newSession: ChatSession = {

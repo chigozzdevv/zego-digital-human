@@ -20,7 +20,9 @@ export const useDigitalHuman = () => {
       const newVideoEnabled = !prev.isVideoEnabled
 
       setTimeout(() => {
-        const videoElement = document.getElementById('digital-human-video') as HTMLVideoElement
+        // Find the dynamically created video element
+        const container = document.getElementById('remoteSteamView')
+        const videoElement = container?.querySelector('video') as HTMLVideoElement
         if (videoElement) {
           videoElement.style.display = newVideoEnabled ? 'block' : 'none'
           console.log(`📹 Digital human video ${newVideoEnabled ? 'enabled' : 'disabled'}`)
