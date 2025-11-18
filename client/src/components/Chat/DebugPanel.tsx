@@ -86,6 +86,7 @@ export const DebugPanel = ({ session, isConnected, agentStatus, messages }: Debu
             <div>App ID: {import.meta.env.VITE_ZEGO_APP_ID ? 'set' : 'missing'}</div>
             <div>Server: {import.meta.env.VITE_ZEGO_SERVER ? 'set' : 'missing'}</div>
             <div>API URL: {import.meta.env.VITE_API_BASE_URL ? 'set' : 'missing'}</div>
+          </div>
         </div>
       </div>
     </div>
