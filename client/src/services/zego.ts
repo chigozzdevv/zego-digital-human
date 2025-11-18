@@ -17,6 +17,7 @@ export class ZegoService {
   private playerStateListeners = new Set<(payload: { state: string; streamID: string; errorCode: number }) => void>()
   private videoReady = false
   private dhVideoStreamId: string | null = null
+  private dhRemoteView: any = null
   private agentAudioStreamId: string | null = null
   private voiceEnabled = false
   private remoteViews = new Map<string, any>()
@@ -259,6 +260,10 @@ export class ZegoService {
         try { this.zg.stopPlayingStream(sid) } catch {}
         if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch {} }
       }
+      if (this.dhRemoteView && typeof this.dhRemoteView.destroy === 'function') {
+        try { this.dhRemoteView.destroy() } catch {}
+      }
+      this.dhRemoteView = null
       this.remoteViews.clear(); this.playingStreamIds.clear()
       this.currentRoomId = null; this.currentUserId = null
     } catch (e) {
@@ -286,7 +291,15 @@ export class ZegoService {
 
   setDigitalHumanStream(streamId: string | null): void {
     this.dhVideoStreamId = streamId || null
-    if (!streamId) this.setVideoReady(false)
+    if (!streamId) {
+      if (this.dhRemoteView && typeof this.dhRemoteView.destroy === 'function') {
+        try { this.dhRemoteView.destroy() } catch {}
+      }
+      this.dhRemoteView = null
+      this.setVideoReady(false)
+      return
+    }
+    this.startDigitalHumanPlayback(streamId)
   }
 
   setAgentAudioStream(streamId: string | null): void { this.agentAudioStreamId = streamId || null }
@@ -340,6 +353,63 @@ export class ZegoService {
   private isStreamPlaying(streamId: string | null | undefined): boolean { return !!streamId && this.playingStreamIds.has(streamId) }
   private markStreamPlaying(streamId: string | null | undefined): void { if (streamId) this.playingStreamIds.add(streamId) }
   private unmarkStreamPlaying(streamId: string | null | undefined): void { if (streamId) this.playingStreamIds.delete(streamId) }
+
+  private async startDigitalHumanPlayback(streamId: string, attempts = 12): Promise<void> {
+    if (!this.zg || !streamId) return
+    if (this.isStreamPlaying(streamId)) return
+
+    const tryStart = async (remaining: number): Promise<void> => {
+      if (!this.zg || !this.dhVideoStreamId || streamId !== this.dhVideoStreamId) return
+      try {
+        const mediaStream = await this.zg.startPlayingStream(streamId)
+        if (!mediaStream) throw new Error('No media stream returned')
+        const videoTracks = mediaStream.getVideoTracks?.().length || 0
+        const audioTracks = mediaStream.getAudioTracks?.length || 0
+        this.streamTracks.set(streamId, { videoTracks, audioTracks })
+
+        const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
+        if (!remoteView) throw new Error('Failed to create remote view for digital human stream')
+
+        Promise.resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
+          .then((result: any) => { if (result !== false) this.audioActivated.add(streamId) })
+          .catch(() => {})
+
+        this.remoteViews.set(streamId, remoteView)
+        this.markStreamPlaying(streamId)
+        this.dhRemoteView = remoteView
+
+        const attach = async (): Promise<void> => {
+          const container = document.getElementById('remoteSteamView')
+          if (!container) {
+            setTimeout(attach, 150)
+            return
+          }
+          try {
+            const res = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+            if (res === false) {
+              const res2 = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
+              this.setVideoReady(res2 === true)
+            } else {
+              this.setVideoReady(true)
+            }
+          } catch (error) {
+            console.warn('Digital human playVideo failed:', error)
+            this.setVideoReady(false)
+          }
+        }
+
+        attach()
+      } catch (error) {
+        if (remaining > 0) {
+          setTimeout(() => void tryStart(remaining - 1), 500)
+        } else {
+          console.warn('Unable to start digital human stream playback:', error)
+        }
+      }
+    }
+
+    tryStart(attempts)
+  }
 
   getStreamsDebug(): Array<{
     streamId: string
