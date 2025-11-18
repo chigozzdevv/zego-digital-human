@@ -379,16 +379,22 @@ export class ZegoService {
         this.dhRemoteView = remoteView
 
         const attach = async (): Promise<void> => {
+          const videoEl = document.getElementById('digital-human-video')
           const container = document.getElementById('remoteSteamView')
-          if (!container) {
+          if (!videoEl || !container) {
             setTimeout(attach, 150)
             return
           }
           try {
-            const res = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+            const res = await Promise.resolve(remoteView.playVideo(videoEl as HTMLElement, { enableAutoplayDialog: false }))
             if (res === false) {
-              const res2 = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
-              this.setVideoReady(res2 === true)
+              const res2 = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+              if (res2 === false) {
+                const res3 = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
+                this.setVideoReady(res3 === true)
+              } else {
+                this.setVideoReady(true)
+              }
             } else {
               this.setVideoReady(true)
             }
