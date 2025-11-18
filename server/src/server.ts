@@ -147,8 +147,8 @@ async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiag
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
     .join('&')
 
-  const baseUrl = apiType === 'digitalhuman' 
-    ? CONFIG.ZEGO_DIGITAL_HUMAN_API_BASE_URL 
+  const baseUrl = apiType === 'digitalhuman'
+    ? CONFIG.ZEGO_DIGITAL_HUMAN_API_BASE_URL
     : CONFIG.ZEGO_AIAGENT_API_BASE_URL
 
   const url = `${baseUrl}?${queryString}`
@@ -221,7 +221,7 @@ async function registerAgent(): Promise<string> {
     Name: 'AI Interview Assistant',
     ...AGENT_CONFIG
   }
-  
+
   console.log('RegisterAgent request')
   const result = await makeZegoRequest('RegisterAgent', registerPayload)
   console.log('RegisterAgent response:', { code: result?.Code, msg: result?.Message })
@@ -311,10 +311,10 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 
     if (!result || result.Code !== 0) {
       console.error('❌ CreateAgentInstance failed. Message:', result.Message)
-      res.status(400).json({ 
-        error: result.Message || 'Failed to create instance', 
-        code: result.Code, 
-        requestId: result.RequestId 
+      res.status(400).json({
+        error: result.Message || 'Failed to create instance',
+        code: result.Code,
+        requestId: result.RequestId
       })
       return
     }
@@ -465,17 +465,17 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       Assets: (reqAssets && Array.isArray(reqAssets) && reqAssets.length > 0)
         ? reqAssets
         : [{
-            AssetType: 1, // Image background (required by API)
-            // Use an HTTP placeholder to comply with "URL" requirement
-            AssetUrl: `https://via.placeholder.com/${clamped.width}x${clamped.height}.png?text=Digital+Human+Background`,
-            Layout: {
-              Top: 0,
-              Left: 0,
-              Width: clamped.width,
-              Height: clamped.height,
-              Layer: 1
-            }
-          }]
+          AssetType: 1, // Image background (required by API)
+          // Use an HTTP placeholder to comply with "URL" requirement
+          AssetUrl: `https://via.placeholder.com/${clamped.width}x${clamped.height}.png?text=Digital+Human+Background`,
+          Layout: {
+            Top: 0,
+            Left: 0,
+            Width: clamped.width,
+            Height: clamped.height,
+            Layer: 1
+          }
+        }]
     }
     if (typeof reqTTL === 'number' && reqTTL >= 10 && reqTTL <= 86400) {
       digitalHumanConfig.TTL = reqTTL
@@ -530,15 +530,55 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       videoStreamId,
       width: digitalHumanConfig.VideoConfig.Width,
       height: digitalHumanConfig.VideoConfig.Height,
-      status: 'Waiting for stream to start...'
+      status: 'Polling for stream to start...'
     })
 
-    // Note: Skipping digital human stream status check due to ZEGO API returning "task not found" errors
-    // The client will handle the stream connection and wait for video data
-    console.log('ℹ️ Digital human stream task created. Client will wait for stream to be ready.')
+    // Poll digital human stream task status until it's streaming (status 3)
+    const taskId = digitalHumanResult.Data?.TaskId
+    let streamReady = false
+    let pollAttempts = 0
+    const maxPollAttempts = 20 // 20 attempts * 500ms = 10 seconds max wait
 
-    // Give the digital human service a moment to initialize
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    console.log('🔄 Polling digital human stream task status...')
+    while (!streamReady && pollAttempts < maxPollAttempts) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 500)) // Wait 500ms between polls
+        pollAttempts++
+
+        const statusResult = await makeZegoRequest('GetDigitalHumanStreamTaskStatus', {
+          TaskId: taskId
+        }, 'digitalhuman')
+
+        if (statusResult.Code === 0) {
+          const status = statusResult.Data?.Status
+          console.log(`📊 Digital human task status (attempt ${pollAttempts}):`, {
+            status,
+            statusText: status === 1 ? 'Initializing' : status === 2 ? 'Failed' : status === 3 ? 'Streaming' : status === 4 ? 'Stopping' : 'Unknown'
+          })
+
+          if (status === 3) {
+            // Status 3 = Streaming - the stream is now available
+            streamReady = true
+            console.log('✅ Digital human stream is now publishing!')
+            break
+          } else if (status === 2) {
+            // Status 2 = Failed
+            console.error('❌ Digital human stream task failed to initialize')
+            throw new Error(`Digital human stream task failed: ${statusResult.Data?.FailReason || 'Unknown error'}`)
+          }
+        } else {
+          console.warn(`⚠️ GetDigitalHumanStreamTaskStatus returned code ${statusResult.Code}: ${statusResult.Message}`)
+        }
+      } catch (pollError: any) {
+        console.warn(`⚠️ Status poll attempt ${pollAttempts} error:`, pollError?.message || pollError)
+        // Continue polling even if one attempt fails
+      }
+    }
+
+    if (!streamReady) {
+      console.warn('⚠️ Digital human stream did not start within timeout period')
+      console.warn('ℹ️ Client will attempt to connect anyway - stream may start shortly')
+    }
 
     if (agentResult?.Data?.AgentInstanceId && digitalHumanResult?.Data?.TaskId) {
       ACTIVE_DH_TASKS.set(agentResult.Data.AgentInstanceId, digitalHumanResult.Data.TaskId)
@@ -647,7 +687,7 @@ app.post('/api/stop-digital-human', async (req: Request, res: Response): Promise
 
     if (result.Code !== 0) {
       console.error('❌ StopDigitalHumanStreamTask failed:', result)
-      res.status(400).json({ 
+      res.status(400).json({
         error: result.Message || 'Failed to stop digital human stream task',
         code: result.Code,
         requestId: result.RequestId
@@ -674,7 +714,7 @@ app.post('/api/stop-digital-human', async (req: Request, res: Response): Promise
 app.get('/api/digital-humans', async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await makeZegoRequest('GetDigitalHumanList', {}, 'digitalhuman')
-    
+
     if (result.Code !== 0) {
       console.error('❌ GetDigitalHumanList failed:', result)
       res.status(400).json({
@@ -753,7 +793,7 @@ app.get('/api/token', (req: Request, res: Response): void => {
 
     const payload = {
       room_id: roomId,
-    privilege: { 1: 1, 2: 1, 3: 1 },
+      privilege: { 1: 1, 2: 1, 3: 1 },
       stream_id_list: null
     }
 

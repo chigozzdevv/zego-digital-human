@@ -185,6 +185,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     }
 
     const setupListeners = (video: HTMLVideoElement) => {
+      let checkInterval: NodeJS.Timeout | null = null
+
       const markReady = () => {
         if (isVideoEnabled && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
           setVideoReady(true)
@@ -217,13 +219,15 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       checkAndForcePlay()
 
       // Also check periodically for the first few seconds
-      const checkInterval = setInterval(checkAndForcePlay, 500)
-      setTimeout(() => clearInterval(checkInterval), 3000)
+      checkInterval = setInterval(checkAndForcePlay, 500)
+      setTimeout(() => {
+        if (checkInterval) clearInterval(checkInterval)
+      }, 3000)
 
       markReady()
 
       return () => {
-        clearInterval(checkInterval)
+        if (checkInterval) clearInterval(checkInterval)
         video.removeEventListener('loadeddata', markReady)
         video.removeEventListener('canplay', markReady)
         video.removeEventListener('play', markReady)
@@ -414,8 +418,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
             <button
               onClick={toggleVideo}
               className={`p-2.5 rounded-full backdrop-blur-xl transition-all duration-200 border ${isVideoEnabled
-                  ? 'bg-white/20 hover:bg-white/30 text-white border-white/20'
-                  : 'bg-red-500/90 hover:bg-red-600 text-white border-red-400/50'
+                ? 'bg-white/20 hover:bg-white/30 text-white border-white/20'
+                : 'bg-red-500/90 hover:bg-red-600 text-white border-red-400/50'
                 }`}
               title={isVideoEnabled ? 'Disable video' : 'Enable video'}
             >
@@ -429,8 +433,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
             <button
               onClick={toggleAudio}
               className={`p-2.5 rounded-full backdrop-blur-xl transition-all duration-200 border ${isAudioEnabled
-                  ? 'bg-white/20 hover:bg-white/30 text-white border-white/20'
-                  : 'bg-red-500/90 hover:bg-red-600 text-white border-red-400/50'
+                ? 'bg-white/20 hover:bg-white/30 text-white border-white/20'
+                : 'bg-red-500/90 hover:bg-red-600 text-white border-red-400/50'
                 }`}
               title={isAudioEnabled ? 'Mute audio' : 'Unmute audio'}
             >
