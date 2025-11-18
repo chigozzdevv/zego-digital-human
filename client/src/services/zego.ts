@@ -44,9 +44,9 @@ export class ZegoService {
       this.setupEventListeners()
       this.setupMediaElements()
       this.isInitialized = true
-      console.log('✅ ZEGO initialized')
+      console.log('ZEGO initialized')
     } catch (e) {
-      console.error('❌ ZEGO initialization failed:', e)
+      console.error('ZEGO initialization failed:', e)
       throw e
     } finally {
       this.isJoining = false
@@ -69,10 +69,10 @@ export class ZegoService {
 
   private setupMediaEventListeners(): void {
     if (this.audioElement) {
-      this.audioElement.addEventListener('error', (e) => console.error('❌ Audio error:', e))
+      this.audioElement.addEventListener('error', (e) => console.error('Audio error:', e))
     }
     if (this.videoElement) {
-      this.videoElement.addEventListener('error', (e) => console.error('❌ Video error:', e))
+      this.videoElement.addEventListener('error', (e) => console.error('Video error:', e))
     }
   }
 
@@ -229,7 +229,7 @@ export class ZegoService {
 
   async enableMicrophone(enabled: boolean): Promise<boolean> {
     if (!this.zg || !this.localStream) {
-      console.warn('⚠️ Cannot toggle microphone: no stream available')
+      console.warn('Cannot toggle microphone: no stream available')
       return false
     }
     try {

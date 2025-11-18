@@ -339,13 +339,13 @@ export const useInterview = () => {
 
       if (result.agentStreamId) {
         zegoService.current.setAgentAudioStream(result.agentStreamId)
-        console.log('🔊 Agent audio stream configured:', result.agentStreamId)
+        console.log('Agent audio stream configured:', result.agentStreamId)
       }
 
       if (result.digitalHumanVideoStreamId) {
         zegoService.current.setDigitalHumanStream(result.digitalHumanVideoStreamId)
         zegoService.current.setVoicePreference(defaultVoiceSettings.isEnabled)
-        console.log('🎯 Digital human video stream configured:', result.digitalHumanVideoStreamId)
+        console.log('Digital human video stream configured:', result.digitalHumanVideoStreamId)
       }
 
       const newSession: ChatSession = {
@@ -365,7 +365,7 @@ export const useInterview = () => {
 
       setupMessageHandlers()
 
-      console.log('✅ Interview session created. Waiting for streams:', {
+      console.log('Interview session created. Waiting for streams:', {
         digitalHumanVideoStreamId: result.digitalHumanVideoStreamId,
         agentStreamId: result.agentStreamId,
         roomId: joinedRoomId

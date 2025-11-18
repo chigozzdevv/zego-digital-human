@@ -12,28 +12,28 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    console.log('🤖 Digital Human API Request:', config.method?.toUpperCase(), config.url)
+    console.log('Digital Human API Request:', config.method?.toUpperCase(), config.url)
     if (config.data && config.method !== 'get') {
-      console.log('📤 Request Data:', config.data)
+      console.log('Request Data:', config.data)
     }
     return config
   },
   (error) => {
-    console.error('❌ API Request Error:', error)
+    console.error('API Request Error:', error)
     return Promise.reject(error)
   }
 )
 
 api.interceptors.response.use(
   (response) => {
-    console.log('✅ Digital Human API Response:', response.status, response.config.url)
+    console.log('Digital Human API Response:', response.status, response.config.url)
     if (response.data) {
-      console.log('📥 Response Data:', response.data)
+      console.log('Response Data:', response.data)
     }
     return response
   },
   (error) => {
-    console.error('❌ API Response Error:', {
+    console.error('API Response Error:', {
       status: error.response?.status,
       statusText: error.response?.statusText,
       data: error.response?.data,
@@ -54,7 +54,7 @@ export const digitalHumanAPI = {
         digital_human_id: 'c4b56d5c-db98-4d91-86d4-5a97b507da97' // Test digital human ID
       }
 
-      console.log('🚀 Starting digital human interview with AI Agent and video stream:', requestData)
+      console.log('Starting digital human interview with AI Agent and video stream:', requestData)
 
       const response = await api.post('/api/start-digital-human', requestData)
 
@@ -66,7 +66,7 @@ export const digitalHumanAPI = {
         throw new Error('Missing required IDs in response')
       }
 
-      console.log('✅ Digital human interview started successfully:', {
+      console.log('Digital human interview started successfully:', {
         agentInstanceId: response.data.agentInstanceId,
         digitalHumanTaskId: response.data.digitalHumanTaskId || 'N/A (unified)',
         digitalHumanVideoStreamId: response.data.digitalHumanVideoStreamId,
@@ -83,48 +83,48 @@ export const digitalHumanAPI = {
         unifiedDigitalHuman: response.data.unifiedDigitalHuman
       }
     } catch (error: any) {
-      console.error('❌ Start digital human interview failed:', error.response?.data || error.message)
+      console.error('Start digital human interview failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to start digital human interview')
     }
   },
 
   async stopInterview(agentInstanceId: string, digitalHumanTaskId?: string): Promise<void> {
     if (!agentInstanceId) {
-      console.warn('⚠️ Missing agent instance ID')
+      console.warn('Missing agent instance ID')
       return
     }
 
     try {
       // Stop AI Agent
-      console.log('🛑 Stopping AI Agent instance:', agentInstanceId)
+      console.log('Stopping AI Agent instance:', agentInstanceId)
       const agentResponse = await api.post('/api/stop', {
         agent_instance_id: agentInstanceId
       })
       
       if (agentResponse.data?.success) {
-        console.log('✅ AI Agent stopped successfully')
+        console.log('AI Agent stopped successfully')
       } else {
-        console.warn('⚠️ AI Agent stop returned non-success:', agentResponse.data)
+        console.warn('AI Agent stop returned non-success:', agentResponse.data)
       }
 
       // Stop Digital Human if task id provided
       if (digitalHumanTaskId) {
-        console.log('🛑 Stopping Digital Human stream task:', digitalHumanTaskId)
+        console.log('Stopping Digital Human stream task:', digitalHumanTaskId)
         const digitalHumanResponse = await api.post('/api/stop-digital-human', {
           task_id: digitalHumanTaskId
         })
         
         if (digitalHumanResponse.data?.success) {
-          console.log('✅ Digital Human stream task stopped successfully')
+          console.log('Digital Human stream task stopped successfully')
         } else {
-          console.warn('⚠️ Digital Human stream task stop returned non-success:', digitalHumanResponse.data)
+          console.warn('Digital Human stream task stop returned non-success:', digitalHumanResponse.data)
         }
       } else {
-        console.warn('ℹ️ No digital human task id provided; skipping video stop')
+        console.warn('No digital human task id provided; skipping video stop')
       }
 
     } catch (error: any) {
-      console.error('❌ Stop digital human interview failed:', error.response?.data || error.message)
+      console.error('Stop digital human interview failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to stop digital human interview')
     }
   },
@@ -135,7 +135,7 @@ export const digitalHumanAPI = {
     if (!trimmed) throw new Error('Message content is required')
 
     try {
-      console.log('💬 Sending message to agent instance:', agentInstanceId)
+      console.log('Sending message to agent instance:', agentInstanceId)
       const response = await api.post('/api/send-message', {
         agent_instance_id: agentInstanceId,
         message: trimmed
@@ -143,9 +143,9 @@ export const digitalHumanAPI = {
       if (!response.data?.success) {
         throw new Error(response.data?.error || 'Message send failed')
       }
-      console.log('✅ Message sent successfully')
+      console.log('Message sent successfully')
     } catch (error: any) {
-      console.error('❌ Send message failed:', error.response?.data || error.message)
+      console.error('Send message failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to send message')
     }
   },
@@ -156,7 +156,7 @@ export const digitalHumanAPI = {
     }
 
     try {
-      console.log('🔑 Getting token for digital human user:', userId, 'roomId:', roomId)
+      console.log('Getting token for digital human user:', userId, 'roomId:', roomId)
 
       const params = new URLSearchParams({ user_id: userId })
       if (roomId) {
@@ -169,26 +169,26 @@ export const digitalHumanAPI = {
         throw new Error('No token returned')
       }
 
-      console.log('✅ Digital human token received successfully')
+      console.log('Digital human token received successfully')
 
       return { token: response.data.token }
     } catch (error: any) {
-      console.error('❌ Get digital human token failed:', error.response?.data || error.message)
+      console.error('Get digital human token failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to get digital human token')
     }
   },
 
   async healthCheck(): Promise<{ status: string }> {
     try {
-      console.log('🏥 Checking digital human backend health')
+      console.log('Checking digital human backend health')
       
       const response = await api.get('/health')
       
-      console.log('✅ Digital human backend health check successful:', response.data)
+      console.log('Digital human backend health check successful:', response.data)
       
       return response.data
     } catch (error: any) {
-      console.error('❌ Digital human backend health check failed:', error.response?.data || error.message)
+      console.error('Digital human backend health check failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Digital human backend health check failed')
     }
   }

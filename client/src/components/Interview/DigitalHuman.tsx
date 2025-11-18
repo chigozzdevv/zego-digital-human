@@ -39,7 +39,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
           service.ensureVideoContainer()
         }
       } catch (error) {
-        console.warn('⚠️ Unable to ensure digital human video container:', error)
+        console.warn('Unable to ensure digital human video container:', error)
       }
     }
     ensureVideoMount()
@@ -83,7 +83,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
 
         unsubscribe = service.onPlayerStateUpdate(handler)
       } catch (error) {
-        console.warn('⚠️ Unable to subscribe to player state updates:', error)
+        console.warn('Unable to subscribe to player state updates:', error)
       }
     }
 
@@ -127,7 +127,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
           }
         }
       } catch (error) {
-        console.warn('⚠️ Unable to evaluate digital human video state:', error)
+        console.warn('Unable to evaluate digital human video state:', error)
       }
     }
 

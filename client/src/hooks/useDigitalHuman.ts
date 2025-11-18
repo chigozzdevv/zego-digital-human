@@ -41,7 +41,7 @@ export const useDigitalHuman = () => {
           audioElement.muted = !newAudioEnabled
         }
 
-        console.log(`🔊 Digital human audio ${newAudioEnabled ? 'enabled' : 'disabled'}`)
+        console.log(`Digital human audio ${newAudioEnabled ? 'enabled' : 'disabled'}`)
       }, 0)
 
       return { ...prev, isAudioEnabled: newAudioEnabled }

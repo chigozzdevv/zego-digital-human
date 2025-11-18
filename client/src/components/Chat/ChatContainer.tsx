@@ -165,9 +165,9 @@ export const ChatContainer = ({ conversationId, onConversationUpdate, onNewConve
             </p>
             {!isConnected && (
               <div className="space-y-2 text-sm text-gray-500 mb-6">
-                <p>🎤 Voice conversations with real-time responses</p>
-                <p>💬 Natural interruption support</p>
-                <p>🧠 Context-aware conversations</p>
+                <p>Voice conversations with real-time responses</p>
+                <p>Natural interruption support</p>
+                <p>Context-aware conversations</p>
               </div>
             )}
             {!isConnected && (

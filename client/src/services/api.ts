@@ -26,7 +26,7 @@ export const agentAPI = {
         user_stream_id: `${userId}_stream`,
       }
       
-      console.log('🚀 Starting session with data:', requestData)
+      console.log('Starting session with data:', requestData)
       
       const response = await api.post('/api/start', requestData)
       
@@ -38,13 +38,13 @@ export const agentAPI = {
         throw new Error('No agent instance ID returned')
       }
       
-      console.log('✅ Session started successfully:', response.data.agentInstanceId)
+      console.log('Session started successfully:', response.data.agentInstanceId)
       
       return {
         agentInstanceId: response.data.agentInstanceId
       }
     } catch (error: any) {
-      console.error('❌ Start session failed:', error.response?.data || error.message)
+      console.error('Start session failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to start session')
     }
   },
@@ -64,7 +64,7 @@ export const agentAPI = {
         message: message.trim(),
       }
       
-      console.log('💬 Sending message:', {
+      console.log('Sending message:', {
         agentInstanceId,
         messageLength: message.length,
         messagePreview: message.substring(0, 50) + (message.length > 50 ? '...' : '')
@@ -76,16 +76,16 @@ export const agentAPI = {
         throw new Error(response.data?.error || 'Message send failed')
       }
       
-      console.log('✅ Message sent successfully')
+      console.log('Message sent successfully')
     } catch (error: any) {
-      console.error('❌ Send message failed:', error.response?.data || error.message)
+      console.error('Send message failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to send message')
     }
   },
 
   async stopSession(agentInstanceId: string): Promise<void> {
     if (!agentInstanceId) {
-      console.warn('⚠️ No agent instance ID provided for stop session')
+      console.warn('No agent instance ID provided for stop session')
       return
     }
 
@@ -94,17 +94,17 @@ export const agentAPI = {
         agent_instance_id: agentInstanceId,
       }
       
-      console.log('🛑 Stopping session:', agentInstanceId)
+      console.log('Stopping session:', agentInstanceId)
       
       const response = await api.post('/api/stop', requestData)
       
       if (!response.data || !response.data.success) {
-        console.warn('⚠️ Session stop returned non-success:', response.data)
+        console.warn('Session stop returned non-success:', response.data)
       } else {
-        console.log('✅ Session stopped successfully')
+        console.log('Session stopped successfully')
       }
     } catch (error: any) {
-      console.error('❌ Stop session failed:', error.response?.data || error.message)
+      console.error('Stop session failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to stop session')
     }
   },
@@ -115,7 +115,7 @@ export const agentAPI = {
     }
 
     try {
-      console.log('🔑 Getting token for user:', userId, 'roomId:', roomId)
+      console.log('Getting token for user:', userId, 'roomId:', roomId)
 
       const params = new URLSearchParams({ user_id: userId })
       if (roomId) {
@@ -128,26 +128,26 @@ export const agentAPI = {
         throw new Error('No token returned')
       }
 
-      console.log('✅ Token received successfully')
+      console.log('Token received successfully')
 
       return { token: response.data.token }
     } catch (error: any) {
-      console.error('❌ Get token failed:', error.response?.data || error.message)
+      console.error('Get token failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Failed to get token')
     }
   },
 
   async healthCheck(): Promise<{ status: string }> {
     try {
-      console.log('🏥 Checking backend health')
+      console.log('Checking backend health')
       
       const response = await api.get('/health')
       
-      console.log('✅ Backend health check successful:', response.data)
+      console.log('Backend health check successful:', response.data)
       
       return response.data
     } catch (error: any) {
-      console.error('❌ Backend health check failed:', error.response?.data || error.message)
+      console.error('Backend health check failed:', error.response?.data || error.message)
       throw new Error(error.response?.data?.error || error.message || 'Backend health check failed')
     }
   }

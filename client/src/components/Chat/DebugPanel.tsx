@@ -47,7 +47,7 @@ export const DebugPanel = ({ session, isConnected, agentStatus, messages }: Debu
       
       <div className="space-y-2">
         <div>
-          <strong>Connection:</strong> {isConnected ? '✅ Connected' : '❌ Disconnected'}
+          <strong>Connection:</strong> {isConnected ? 'Connected' : 'Disconnected'}
         </div>
         
         <div>
@@ -55,7 +55,7 @@ export const DebugPanel = ({ session, isConnected, agentStatus, messages }: Debu
         </div>
         
         <div>
-          <strong>Session:</strong> {session ? '✅ Active' : '❌ None'}
+          <strong>Session:</strong> {session ? 'Active' : 'None'}
           {session && (
             <div className="ml-2 text-xs">
               <div>Room: {session.roomId}</div>
@@ -83,10 +83,9 @@ export const DebugPanel = ({ session, isConnected, agentStatus, messages }: Debu
         <div>
           <strong>Environment:</strong>
           <div className="ml-2 text-xs">
-            <div>App ID: {import.meta.env.VITE_ZEGO_APP_ID ? '✅' : '❌'}</div>
-            <div>Server: {import.meta.env.VITE_ZEGO_SERVER ? '✅' : '❌'}</div>
-            <div>API URL: {import.meta.env.VITE_API_BASE_URL ? '✅' : '❌'}</div>
-          </div>
+            <div>App ID: {import.meta.env.VITE_ZEGO_APP_ID ? 'set' : 'missing'}</div>
+            <div>Server: {import.meta.env.VITE_ZEGO_SERVER ? 'set' : 'missing'}</div>
+            <div>API URL: {import.meta.env.VITE_API_BASE_URL ? 'set' : 'missing'}</div>
         </div>
       </div>
     </div>
