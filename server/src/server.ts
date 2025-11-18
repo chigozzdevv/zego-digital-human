@@ -461,22 +461,15 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         Width: clamped.width,
         Height: clamped.height,
         Bitrate: reqVideo?.Bitrate ?? 2000000
-      },
-      Assets: (reqAssets && Array.isArray(reqAssets) && reqAssets.length > 0)
-        ? reqAssets
-        : [{
-          AssetType: 1, // Image background (required by API)
-          // Use an HTTP placeholder to comply with "URL" requirement
-          AssetUrl: `https://via.placeholder.com/${clamped.width}x${clamped.height}.png?text=Digital+Human+Background`,
-          Layout: {
-            Top: 0,
-            Left: 0,
-            Width: clamped.width,
-            Height: clamped.height,
-            Layer: 1
-          }
-        }]
+      }
     }
+
+    // Only include Assets if explicitly provided by client
+    // Omitting Assets entirely - the placeholder image was causing task failures
+    if (reqAssets && Array.isArray(reqAssets) && reqAssets.length > 0) {
+      digitalHumanConfig.Assets = reqAssets
+    }
+
     if (typeof reqTTL === 'number' && reqTTL >= 10 && reqTTL <= 86400) {
       digitalHumanConfig.TTL = reqTTL
     }
