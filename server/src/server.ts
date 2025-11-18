@@ -525,12 +525,49 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    console.log('✅ Digital Human video stream created:', {
+    console.log('✅ Digital Human video stream task created:', {
       taskId: digitalHumanResult.Data?.TaskId,
       videoStreamId,
       width: digitalHumanConfig.VideoConfig.Width,
-      height: digitalHumanConfig.VideoConfig.Height
+      height: digitalHumanConfig.VideoConfig.Height,
+      status: 'Waiting for stream to start...'
     })
+
+    // Wait for digital human stream to reach "Streaming" status (status = 3)
+    const taskId = digitalHumanResult.Data?.TaskId
+    let streamingStatus = false
+    let statusCheckAttempts = 0
+    const maxStatusChecks = 30 // 30 seconds max wait
+
+    while (!streamingStatus && statusCheckAttempts < maxStatusChecks) {
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second between checks
+      statusCheckAttempts++
+
+      try {
+        const statusResult = await makeZegoRequest('GetDigitalHumanStreamTaskStatus', {
+          TaskId: taskId
+        }, 'digitalhuman')
+
+        if (statusResult?.Code === 0) {
+          const status = statusResult.Data?.TaskStatus
+          console.log(`🔍 Digital human stream status check #${statusCheckAttempts}: status=${status}`)
+
+          if (status === 3) {
+            streamingStatus = true
+            console.log('✅ Digital human stream is now STREAMING')
+          } else if (status === 4 || status === 5) {
+            // Status 4 = Failed, Status 5 = Stopped
+            throw new Error(`Digital human stream task failed with status: ${status}`)
+          }
+        }
+      } catch (statusError) {
+        console.warn(`⚠️ Status check attempt ${statusCheckAttempts} failed:`, (statusError as Error)?.message)
+      }
+    }
+
+    if (!streamingStatus) {
+      console.warn('⚠️ Digital human stream did not reach Streaming status within 30s timeout, but continuing anyway...')
+    }
 
     if (agentResult?.Data?.AgentInstanceId && digitalHumanResult?.Data?.TaskId) {
       ACTIVE_DH_TASKS.set(agentResult.Data.AgentInstanceId, digitalHumanResult.Data.TaskId)

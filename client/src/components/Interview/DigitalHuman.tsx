@@ -98,8 +98,17 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   useEffect(() => {
     const handleGlobalState = (event: Event) => {
       const custom = event as CustomEvent<{ ready: boolean }>
-      if (typeof custom.detail?.ready === 'boolean' && isVideoEnabled) {
-        setVideoReady(custom.detail.ready)
+      // Don't automatically set videoReady - let the polling check handle it
+      // This prevents oscillation between ZegoService state and actual video element state
+      if (custom.detail?.ready === true && isVideoEnabled) {
+        // Only trigger a check, don't directly set the state
+        const container = document.getElementById('remoteSteamView')
+        const videoEl = container?.querySelector('video') as HTMLVideoElement
+        if (videoEl && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+          setVideoReady(true)
+        }
+      } else if (custom.detail?.ready === false) {
+        setVideoReady(false)
       }
     }
 
@@ -124,15 +133,20 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
             videoRef.current = videoEl
             if (!isVideoEnabled) {
               setVideoReady(false)
-            } else if (service.isVideoReady() || (!videoEl.paused && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0)) {
-              setVideoReady(true)
             } else {
-              setVideoReady(false)
+              // Only mark as ready if video element has actual video data
+              const hasVideoData = videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0 && videoEl.videoHeight > 0
+              setVideoReady(hasVideoData)
             }
+          } else {
+            setVideoReady(false)
           }
+        } else {
+          setVideoReady(false)
         }
       } catch (error) {
         console.warn('Unable to evaluate digital human video state:', error)
+        setVideoReady(false)
       }
     }
 
@@ -186,6 +200,13 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       video.addEventListener('stalled', handleWaiting)
       video.addEventListener('emptied', handleWaiting)
 
+      // Try to force video to load if it has a srcObject but readyState is 0
+      if (video.srcObject && video.readyState === 0) {
+        console.log('🔧 Video has srcObject but readyState is 0, attempting to force load...')
+        video.load()
+        video.play().catch(err => console.warn('Auto-play prevented:', err))
+      }
+
       markReady()
 
       return () => {
@@ -221,6 +242,22 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
         const container = document.getElementById('remoteSteamView')
         const dynamicVideoEl = container?.querySelector('video') as HTMLVideoElement
 
+        // Check MediaStream details
+        let streamInfo = null
+        if (dynamicVideoEl?.srcObject) {
+          const stream = dynamicVideoEl.srcObject as MediaStream
+          const videoTracks = stream.getVideoTracks()
+          streamInfo = {
+            hasStream: true,
+            videoTrackCount: videoTracks.length,
+            videoTrackEnabled: videoTracks[0]?.enabled,
+            videoTrackReadyState: videoTracks[0]?.readyState,
+            videoTrackMuted: videoTracks[0]?.muted,
+            streamActive: stream.active,
+            streamId: stream.id
+          }
+        }
+
         setDebugInfo({
           isConnected,
           isVideoEnabled,
@@ -242,6 +279,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
             muted: (dynamicVideoEl || videoEl).muted,
             currentTime: (dynamicVideoEl || videoEl).currentTime,
             hasSrcObject: !!(dynamicVideoEl || videoEl).srcObject,
+            srcObjectType: (dynamicVideoEl || videoEl).srcObject?.constructor?.name,
             style: {
               display: (dynamicVideoEl || videoEl).style.display,
               visibility: (dynamicVideoEl || videoEl).style.visibility,
@@ -252,6 +290,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
             inDOM: document.body.contains(dynamicVideoEl || videoEl),
             parentElement: (dynamicVideoEl || videoEl).parentElement?.tagName
           } : null,
+          mediaStream: streamInfo,
           zegoService: {
             isVideoReady: service.isVideoReady(),
             isInRoom: service.isInRoom(),
