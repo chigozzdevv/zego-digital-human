@@ -512,26 +512,37 @@ export class ZegoService {
 
   private async startDigitalHumanPlayback(streamId: string, attempts = 12): Promise<void> {
     if (!this.zg || !streamId) return
-    if (this.isStreamPlaying(streamId)) return
+    if (this.isStreamPlaying(streamId)) {
+      console.log('Digital human stream already playing, skipping:', streamId)
+      return
+    }
+
+    // Mark as playing immediately to prevent race condition
+    this.markStreamPlaying(streamId)
 
     const tryStart = async (remaining: number): Promise<void> => {
       if (!this.zg || !this.dhVideoStreamId || streamId !== this.dhVideoStreamId) return
       try {
         const mediaStream = await this.zg.startPlayingStream(streamId)
-        if (!mediaStream) throw new Error('No media stream returned')
+        if (!mediaStream) {
+          this.unmarkStreamPlaying(streamId)
+          throw new Error('No media stream returned')
+        }
         const videoTracks = mediaStream.getVideoTracks?.().length || 0
         const audioTracks = mediaStream.getAudioTracks?.length || 0
         this.streamTracks.set(streamId, { videoTracks, audioTracks })
 
         const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
-        if (!remoteView) throw new Error('Failed to create remote view for digital human stream')
+        if (!remoteView) {
+          this.unmarkStreamPlaying(streamId)
+          throw new Error('Failed to create remote view for digital human stream')
+        }
 
         Promise.resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
           .then((result: any) => { if (result !== false) this.audioActivated.add(streamId) })
           .catch(() => { })
 
         this.remoteViews.set(streamId, remoteView)
-        this.markStreamPlaying(streamId)
         this.dhRemoteView = remoteView
 
         const attach = async (): Promise<void> => {
