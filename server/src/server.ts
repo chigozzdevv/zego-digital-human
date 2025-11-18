@@ -900,48 +900,6 @@ app.post('/api/admin/cleanup-digital-human', async (req: Request, res: Response)
   }
 })
 
-// Cleanup endpoint to stop all active sessions
-app.post('/api/cleanup', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const results = { trackedStopped: 0, zegoCloudStopped: 0, errors: [] as string[] }
-
-    // Stop tracked tasks in server memory
-    for (const [key, details] of ACTIVE_DH_TASK_DETAILS.entries()) {
-      try {
-        await makeZegoRequest('StopDigitalHumanStreamTask', { TaskId: details.taskId }, 'digitalhuman')
-        ACTIVE_DH_TASK_DETAILS.delete(key)
-        ACTIVE_DH_TASKS.delete(key)
-        results.trackedStopped++
-      } catch (e) {
-        results.errors.push(`Tracked task ${details.taskId} failed`)
-      }
-    }
-
-    // Query ZegoCloud for ALL running tasks and stop them
-    try {
-      const queryResult = await makeZegoRequest('QueryRunningDigitalHumanVideoStreamTasks', {}, 'digitalhuman')
-      if (queryResult?.Code === 0 && queryResult?.Data?.TaskList) {
-        console.log(`Found ${queryResult.Data.TaskList.length} running tasks on ZegoCloud`)
-        for (const task of queryResult.Data.TaskList) {
-          try {
-            await makeZegoRequest('StopDigitalHumanStreamTask', { TaskId: task.TaskId }, 'digitalhuman')
-            results.zegoCloudStopped++
-          } catch (e) {
-            results.errors.push(`ZegoCloud task ${task.TaskId} failed`)
-          }
-        }
-      }
-    } catch (e) {
-      results.errors.push(`Query failed: ${(e as any)?.message}`)
-    }
-
-    console.log('Cleanup completed:', results)
-    res.json({ success: true, ...results })
-  } catch (error) {
-    console.error('Cleanup failed:', error)
-    res.status(500).json({ error: 'Cleanup failed', details: (error as Error).message })
-  }
-})
 
 // Error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void => {
@@ -953,7 +911,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void =>
 app.listen(CONFIG.PORT, () => {
   console.log(`AI Interview Assistant server running on port ${CONFIG.PORT}`)
   console.log(`Features: Digital Human + Voice Interaction`)
-  console.log(`Endpoints: /api/start, /api/start-digital-human, /api/token, /api/cleanup`)
+  console.log(`Endpoints: /api/start, /api/start-digital-human, /api/token`)
 })
 async function stopDigitalHumanTask(taskId: string): Promise<void> {
   if (!taskId) return
