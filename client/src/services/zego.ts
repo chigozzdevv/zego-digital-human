@@ -129,7 +129,8 @@ export class ZegoService {
                     }
                     try {
                       console.log(`▶️ Attempting to play video in remoteSteamView for stream: ${streamId}`)
-                      const result = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+                      // Pass the container element, not the ID string
+                      const result = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
                       console.log(`📺 RemoteView.playVideo result:`, result)
 
                       // CRITICAL FIX: Verify video element has srcObject attached
@@ -536,9 +537,9 @@ export class ZegoService {
           }
 
           try {
-            // ZEGO's RemoteStreamView.playVideo expects a container element
             console.log(`🎬 Starting digital human video playback for stream: ${streamId}`)
-            const result = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
+            // Pass the container element, not the ID string
+            const result = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
             console.log(`📺 Digital human playVideo result:`, result)
 
             // CRITICAL FIX: Verify and ensure srcObject is attached

@@ -206,11 +206,11 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       // This is the exact issue from the debug logs: hasSrcObject: false, readyState: 0
       const checkAndForcePlay = () => {
         if (video.srcObject && video.readyState === 0) {
-          console.log('🔧 Video has srcObject but readyState is 0, forcing load and play...')
+          console.log(' Video has srcObject but readyState is 0, forcing load and play...')
           video.load()
           video.play().catch(err => console.warn('Auto-play prevented:', err))
         } else if (video.srcObject && video.paused && video.readyState > 0) {
-          console.log('🔧 Video has srcObject and data but is paused, attempting play...')
+          console.log(' Video has srcObject and data but is paused, attempting play...')
           video.play().catch(err => console.warn('Auto-play prevented:', err))
         }
       }

@@ -25,7 +25,7 @@ export const useDigitalHuman = () => {
         const videoElement = container?.querySelector('video') as HTMLVideoElement
         if (videoElement) {
           videoElement.style.display = newVideoEnabled ? 'block' : 'none'
-          console.log(`📹 Digital human video ${newVideoEnabled ? 'enabled' : 'disabled'}`)
+          console.log(` Digital human video ${newVideoEnabled ? 'enabled' : 'disabled'}`)
         }
       }, 0)
 

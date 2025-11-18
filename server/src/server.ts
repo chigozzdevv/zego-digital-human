@@ -155,7 +155,7 @@ async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiag
 
   try {
     const safeQuery = { ...queryParams, Signature: '***' }
-    console.log('➡️ ZEGO API Request', {
+    console.log('ZEGO API Request', {
       action,
       apiType,
       urlBase: baseUrl,
@@ -166,7 +166,7 @@ async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiag
       headers: { 'Content-Type': 'application/json' },
       timeout: 30000
     })
-    console.log('⬅️ ZEGO API Response', {
+    console.log('ZEGO API Response', {
       action,
       apiType,
       status: response.status,
@@ -283,7 +283,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 
     const payloadAttempts = [buildInstancePayload(sanitizedUserId)]
 
-    console.log('🧪 CreateAgentInstance identifiers:', {
+    console.log('CreateAgentInstance identifiers:', {
       roomId: roomIdRTC,
       userId: user_id,
       agentUserId,
@@ -299,18 +299,18 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
     let result: any = null
     for (let i = 0; i < payloadAttempts.length; i++) {
       const attemptBody = payloadAttempts[i]
-      console.log(`➡️ CreateAgentInstance attempt #${i + 1}`)
+      console.log(`CreateAgentInstance attempt #${i + 1}`)
       try {
         result = await makeZegoRequest('CreateAgentInstance', attemptBody, 'aiagent')
-        console.log(`📥 CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(result, null, 2))
+        console.log(`CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(result, null, 2))
         if (result?.Code === 0) break
       } catch (e: any) {
-        console.warn(`⚠️ CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
+        console.warn(`CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
       }
     }
 
     if (!result || result.Code !== 0) {
-      console.error('❌ CreateAgentInstance failed. Message:', result.Message)
+      console.error('CreateAgentInstance failed. Message:', result.Message)
       res.status(400).json({
         error: result.Message || 'Failed to create instance',
         code: result.Code,
@@ -319,7 +319,7 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    console.log('✅ AI Agent instance created:', result.Data?.AgentInstanceId)
+    console.log('AI Agent instance created:', result.Data?.AgentInstanceId)
     res.json({
       success: true,
       agentInstanceId: result.Data?.AgentInstanceId,
@@ -359,7 +359,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const { agentUserId, agentStreamId } = buildAgentIdentifiers(roomIdRTC)
     const digitalHumanId = digital_human_id || 'c4b56d5c-db98-4d91-86d4-5a97b507da97'
 
-    console.log('🎭 Starting digital human interview:', { room_id: roomIdRTC, digitalHumanId })
+    console.log('Starting digital human interview:', { room_id: roomIdRTC, digitalHumanId })
 
     const agentId = await registerAgent()
 
@@ -391,7 +391,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
 
     const payloadAttempts = [buildInstancePayloadDH(sanitizedUserIdDH)]
 
-    console.log('🧪 CreateAgentInstance identifiers:', {
+    console.log('CreateAgentInstance identifiers:', {
       roomId: roomIdRTC,
       userId: user_id,
       agentUserId,
@@ -409,18 +409,18 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     let agentResult: any = null
     for (let i = 0; i < payloadAttempts.length; i++) {
       const attemptBody = payloadAttempts[i]
-      console.log(`➡️ CreateAgentInstance attempt #${i + 1}`)
+      console.log(`CreateAgentInstance attempt #${i + 1}`)
       try {
         agentResult = await makeZegoRequest('CreateAgentInstance', attemptBody, 'aiagent')
-        console.log(`📥 CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(agentResult, null, 2))
+        console.log(`CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(agentResult, null, 2))
         if (agentResult?.Code === 0) break
       } catch (e: any) {
-        console.warn(`⚠️ CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
+        console.warn(`CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
       }
     }
 
     if (!agentResult || agentResult.Code !== 0) {
-      console.error('❌ CreateAgentInstance failed. Message:', agentResult?.Message)
+      console.error('CreateAgentInstance failed. Message:', agentResult?.Message)
       res.status(400).json({
         error: agentResult?.Message || 'Failed to create AI agent instance',
         code: agentResult?.Code,
@@ -429,14 +429,14 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    console.log('✅ AI Agent instance created:', agentResult.Data?.AgentInstanceId)
+    console.log('AI Agent instance created:', agentResult.Data?.AgentInstanceId)
 
     // Step 3: Create Digital Human video stream task (separate from audio agent)
     const defaultWidth = reqVideo?.Width ?? 1280
     const defaultHeight = reqVideo?.Height ?? 720
     const clamped = clampVideoDimensions(defaultWidth, defaultHeight)
     const videoStreamId = uniqueStreamId(agentStreamId)
-    console.log('🧮 Digital human video config', {
+    console.log('Digital human video config', {
       requested: { width: defaultWidth, height: defaultHeight },
       clamped
     })
@@ -474,8 +474,8 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       digitalHumanConfig.TTL = reqTTL
     }
 
-    console.log('🎭 Creating digital human video stream task...')
-    console.log('📊 Digital Human Config:', {
+    console.log('Creating digital human video stream task...')
+    console.log('Digital Human Config:', {
       videoStreamId,
       digitalHumanId,
       roomId: roomIdRTC,
@@ -483,14 +483,14 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       videoConfig: digitalHumanConfig.VideoConfig,
       rtcConfig: digitalHumanConfig.RTCConfig
     })
-    console.log('➡️ CreateDigitalHumanStreamTask')
+    console.log('CreateDigitalHumanStreamTask')
 
     let digitalHumanResult = await makeZegoRequest('CreateDigitalHumanStreamTask', digitalHumanConfig, 'digitalhuman')
-    console.log('⬅️ CreateDigitalHumanStreamTask:', { code: digitalHumanResult?.Code, msg: digitalHumanResult?.Message, taskId: digitalHumanResult?.Data?.TaskId })
+    console.log('CreateDigitalHumanStreamTask:', { code: digitalHumanResult?.Code, msg: digitalHumanResult?.Message, taskId: digitalHumanResult?.Data?.TaskId })
     let createAttempts = 1
 
     while (digitalHumanResult?.Code === 400000008 && createAttempts < MAX_DH_CREATE_RETRY) {
-      console.warn('⚠️ CreateDigitalHumanStreamTask hit concurrent limit, attempting cleanup')
+      console.warn('CreateDigitalHumanStreamTask hit concurrent limit, attempting cleanup')
       await cleanupActiveDigitalHumanTasks('concurrent_limit')
       await new Promise(resolve => setTimeout(resolve, 800))
       createAttempts += 1
@@ -498,7 +498,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     }
 
     if (digitalHumanResult.Code !== 0) {
-      console.error('❌ CreateDigitalHumanStreamTask failed:', {
+      console.error('CreateDigitalHumanStreamTask failed:', {
         code: digitalHumanResult.Code,
         message: digitalHumanResult.Message,
         requestId: digitalHumanResult.RequestId,
@@ -518,7 +518,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return
     }
 
-    console.log('✅ Digital Human video stream task created:', {
+    console.log('Digital Human video stream task created:', {
       taskId: digitalHumanResult.Data?.TaskId,
       videoStreamId,
       width: digitalHumanConfig.VideoConfig.Width,
@@ -569,8 +569,8 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     }
 
     if (!streamReady) {
-      console.warn('⚠️ Digital human stream did not start within timeout period')
-      console.warn('ℹ️ Client will attempt to connect anyway - stream may start shortly')
+      console.warn('Digital human stream did not start within timeout period')
+      console.warn('Client will attempt to connect anyway - stream may start shortly')
     }
 
     if (agentResult?.Data?.AgentInstanceId && digitalHumanResult?.Data?.TaskId) {
@@ -616,7 +616,7 @@ app.post('/api/stop', async (req: Request, res: Response): Promise<void> => {
       const status = await makeZegoRequest('QueryAgentInstanceStatus', {
         AgentInstanceId: agent_instance_id
       })
-      console.log('📊 Performance metrics:', {
+      console.log('Performance metrics:', {
         llmFirstToken: status.Data?.LLMFirstTokenLatency + 'ms',
         llmSpeed: status.Data?.LLMOutputSpeed + ' tokens/s',
         ttsFirstAudio: status.Data?.TTSFirstAudioLatency + 'ms'
@@ -646,7 +646,7 @@ app.post('/api/stop', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    console.log('✅ AI Agent stopped:', agent_instance_id.substring(0, 20) + '...')
+    console.log('AI Agent stopped:', agent_instance_id.substring(0, 20) + '...')
     res.json({ success: true })
 
   } catch (error: any) {
@@ -679,7 +679,7 @@ app.post('/api/stop-digital-human', async (req: Request, res: Response): Promise
     }
 
     if (result.Code !== 0) {
-      console.error('❌ StopDigitalHumanStreamTask failed:', result)
+      console.error('StopDigitalHumanStreamTask failed:', result)
       res.status(400).json({
         error: result.Message || 'Failed to stop digital human stream task',
         code: result.Code,
@@ -688,7 +688,7 @@ app.post('/api/stop-digital-human', async (req: Request, res: Response): Promise
       return
     }
 
-    console.log('✅ Digital Human video stream stopped:', task_id.substring(0, 20) + '...')
+    console.log('Digital Human video stream stopped:', task_id.substring(0, 20) + '...')
     for (const [agentInstanceId, storedTaskId] of ACTIVE_DH_TASKS.entries()) {
       if (storedTaskId === task_id) {
         ACTIVE_DH_TASKS.delete(agentInstanceId)
@@ -709,7 +709,7 @@ app.get('/api/digital-humans', async (_req: Request, res: Response): Promise<voi
     const result = await makeZegoRequest('GetDigitalHumanList', {}, 'digitalhuman')
 
     if (result.Code !== 0) {
-      console.error('❌ GetDigitalHumanList failed:', result)
+      console.error('GetDigitalHumanList failed:', result)
       res.status(400).json({
         error: result.Message || 'Failed to query digital humans',
         code: result.Code,
@@ -719,7 +719,7 @@ app.get('/api/digital-humans', async (_req: Request, res: Response): Promise<voi
     }
 
     const count = result.Data?.List?.length || 0
-    console.log('✅ Digital humans queried:', count, 'found')
+    console.log('Digital humans queried:', count, 'found')
     res.json({
       success: true,
       digitalHumans: result.Data?.List || []
@@ -794,7 +794,7 @@ app.get('/api/token', (req: Request, res: Response): void => {
     res.json({ token })
 
   } catch (error: any) {
-    console.error('❌ Token generation error:', error)
+    console.error('Token generation error:', error)
     res.status(500).json({ error: error.message || 'Failed to generate token' })
   }
 })
@@ -819,22 +819,22 @@ app.post('/api/callbacks', (req: Request, res: Response): void => {
 
   switch (Event) {
     case 'Exception':
-      console.error('❌ Exception:', Data.Message)
+      console.error('Exception:', Data.Message)
       break
     case 'AgentSpeakAction':
-      console.log('🗣️ Agent:', Data.Action === 'SPEAK_BEGIN' ? 'Started' : 'Ended')
+      console.log('Agent:', Data.Action === 'SPEAK_BEGIN' ? 'Started' : 'Ended')
       break
     case 'UserSpeakAction':
-      console.log('🎤 User:', Data.Action === 'SPEAK_BEGIN' ? 'Started' : 'Ended')
+      console.log('User:', Data.Action === 'SPEAK_BEGIN' ? 'Started' : 'Ended')
       break
     case 'Interrupted':
-      console.log('✋ Agent interrupted')
+      console.log('Agent interrupted')
       break
     case 'ASRResult':
       if (Data.EndFlag) console.log('🎯 ASR:', Data.Text?.substring(0, 50))
       break
     case 'LLMResult':
-      if (Data.EndFlag) console.log('🤖 LLM:', Data.Text?.substring(0, 50))
+      if (Data.EndFlag) console.log('LLM:', Data.Text?.substring(0, 50))
       break
   }
 
@@ -895,29 +895,29 @@ app.post('/api/admin/cleanup-digital-human', async (req: Request, res: Response)
       manualStopResults
     })
   } catch (error: any) {
-    console.error('❌ Manual cleanup error:', error)
+    console.error('Manual cleanup error:', error)
     res.status(500).json({ error: error.message || 'Failed to cleanup digital human tasks' })
   }
 })
 
 // Error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void => {
-  console.error('❌ Unhandled error:', err)
+  console.error('Unhandled error:', err)
   res.status(500).json({ error: 'Internal server error' })
 })
 
 // Start server
 app.listen(CONFIG.PORT, () => {
-  console.log(`🎤 AI Interview Assistant server running on port ${CONFIG.PORT}`)
-  console.log(`🤖 Features: Digital Human + Voice Interaction`)
-  console.log(`📡 Endpoints: /api/start, /api/start-digital-human, /api/token`)
+  console.log(`AI Interview Assistant server running on port ${CONFIG.PORT}`)
+  console.log(`Features: Digital Human + Voice Interaction`)
+  console.log(`Endpoints: /api/start, /api/start-digital-human, /api/token`)
 })
 async function stopDigitalHumanTask(taskId: string): Promise<void> {
   if (!taskId) return
   try {
     await makeZegoRequest('StopDigitalHumanStreamTask', { TaskId: taskId }, 'digitalhuman')
   } catch (error) {
-    console.warn('⚠️ stopDigitalHumanTask failed', { taskId, message: (error as Error)?.message })
+    console.warn('stopDigitalHumanTask failed', { taskId, message: (error as Error)?.message })
   }
 }
 
@@ -926,7 +926,7 @@ async function stopAgentInstance(agentInstanceId: string): Promise<void> {
   try {
     await makeZegoRequest('DeleteAgentInstance', { AgentInstanceId: agentInstanceId }, 'aiagent')
   } catch (error) {
-    console.warn('⚠️ stopAgentInstance failed', { agentInstanceId, message: (error as Error)?.message })
+    console.warn('stopAgentInstance failed', { agentInstanceId, message: (error as Error)?.message })
   }
 }
 
