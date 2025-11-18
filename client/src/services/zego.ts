@@ -87,13 +87,19 @@ export class ZegoService {
 
     this.zg.on('roomStreamUpdate', async (_roomID: string, updateType: 'ADD' | 'DELETE', streamList: any[]) => {
       if (updateType === 'ADD') {
-        const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
         for (const stream of streamList) {
           const streamId = stream.streamID
-          try { console.log('roomStreamUpdate ADD:', streamId) } catch { }
+          const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
           if (userStreamId && streamId === userStreamId) continue
+
+          try { console.log('roomStreamUpdate ADD:', streamId) } catch { }
           if (typeof streamId === 'string' && streamId.startsWith('zegoprobe')) continue
-          if (this.isStreamPlaying(streamId)) continue
+          if (this.isStreamPlaying(streamId)) {
+            console.log('Stream already playing, skipping:', streamId)
+            continue
+          }
+          // Mark as playing immediately to prevent race condition
+          this.markStreamPlaying(streamId)
           try {
             const playOption = { jitterBufferTarget: 500 } as any
             const mediaStream = await this.zg!.startPlayingStream(streamId, playOption)
@@ -111,7 +117,6 @@ export class ZegoService {
                 .then((r: any) => { if (r !== false) this.audioActivated.add(streamId) })
                 .catch(() => { })
               this.remoteViews.set(streamId, remoteView)
-              this.markStreamPlaying(streamId)
               // Fallback: if a video track already exists, try render immediately
               try {
                 const hasVideo = (mediaStream.getVideoTracks?.() || []).length > 0
