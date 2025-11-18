@@ -900,6 +900,28 @@ app.post('/api/admin/cleanup-digital-human', async (req: Request, res: Response)
   }
 })
 
+// Cleanup endpoint to stop all active sessions
+app.post('/api/cleanup', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const results = { digitalHumansStopped: 0, errors: [] as string[] }
+    for (const [key, details] of ACTIVE_DH_TASK_DETAILS.entries()) {
+      try {
+        await makeZegoRequest('StopDigitalHumanStreamTask', { TaskId: details.taskId }, 'digitalhuman')
+        ACTIVE_DH_TASK_DETAILS.delete(key)
+        ACTIVE_DH_TASKS.delete(key)
+        results.digitalHumansStopped++
+      } catch (e) {
+        results.errors.push(`Failed to stop DH task ${details.taskId}`)
+      }
+    }
+    console.log('Cleanup completed:', results)
+    res.json({ success: true, ...results })
+  } catch (error) {
+    console.error('Cleanup failed:', error)
+    res.status(500).json({ error: 'Cleanup failed' })
+  }
+})
+
 // Error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void => {
   console.error('Unhandled error:', err)
@@ -910,7 +932,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void =>
 app.listen(CONFIG.PORT, () => {
   console.log(`AI Interview Assistant server running on port ${CONFIG.PORT}`)
   console.log(`Features: Digital Human + Voice Interaction`)
-  console.log(`Endpoints: /api/start, /api/start-digital-human, /api/token`)
+  console.log(`Endpoints: /api/start, /api/start-digital-human, /api/token, /api/cleanup`)
 })
 async function stopDigitalHumanTask(taskId: string): Promise<void> {
   if (!taskId) return
