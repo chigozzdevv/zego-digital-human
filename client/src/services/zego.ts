@@ -385,23 +385,35 @@ export class ZegoService {
             setTimeout(attach, 150)
             return
           }
-          try {
-            const res = await Promise.resolve(remoteView.playVideo(videoEl as HTMLElement, { enableAutoplayDialog: false }))
-            if (res === false) {
-              const res2 = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
-              if (res2 === false) {
-                const res3 = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
-                this.setVideoReady(res3 === true)
-              } else {
-                this.setVideoReady(true)
-              }
-            } else {
-              this.setVideoReady(true)
+          const tryPlay = async (target: string | HTMLElement) => {
+            try {
+              return await Promise.resolve(remoteView.playVideo(target, { enableAutoplayDialog: false }))
+            } catch (error) {
+              console.warn('Digital human playVideo failed:', error)
+              return false
             }
-          } catch (error) {
-            console.warn('Digital human playVideo failed:', error)
-            this.setVideoReady(false)
           }
+
+          const primary = await tryPlay('digital-human-video')
+          if (primary === true) {
+            this.setVideoReady(true)
+            return
+          }
+
+          const secondary = await tryPlay(videoEl as HTMLElement)
+          if (secondary === true) {
+            this.setVideoReady(true)
+            return
+          }
+
+          const fallback = await tryPlay('remoteSteamView')
+          if (fallback === true) {
+            this.setVideoReady(true)
+            return
+          }
+
+          const finalTry = await tryPlay(container as HTMLElement)
+          this.setVideoReady(finalTry === true)
         }
 
         attach()
