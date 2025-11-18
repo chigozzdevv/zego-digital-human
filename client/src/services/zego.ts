@@ -145,7 +145,18 @@ export class ZegoService {
                           // If RemoteView didn't attach the stream, do it manually
                           if (!videoEl.srcObject && mediaStream) {
                             console.log('🔧 RemoteView did not attach srcObject, attaching manually...')
+
+                            // CRITICAL: Unmute video tracks before attaching
+                            const videoTracks = mediaStream.getVideoTracks()
+                            videoTracks.forEach(track => {
+                              if (track.muted) {
+                                console.log('🔧 Unmuting video track:', track.id)
+                                track.enabled = true
+                              }
+                            })
+
                             videoEl.srcObject = mediaStream
+                            videoEl.muted = false // Unmute the video element itself
                             videoEl.load()
                             videoEl.play()
                               .then(() => {
@@ -169,6 +180,40 @@ export class ZegoService {
                                 this.updateVideoElement()
                               })
                               .catch(err => console.warn('⚠️ Auto-play prevented:', err))
+                          } else if (videoEl.srcObject && videoEl.readyState === 0) {
+                            // CRITICAL: srcObject exists but readyState is 0 - force reload
+                            console.log('🔧 CRITICAL: Video has srcObject but readyState is 0, forcing reload...')
+                            const stream = videoEl.srcObject as MediaStream
+                            const videoTracks = stream.getVideoTracks()
+                            console.log(`🔍 MediaStream state:`, {
+                              active: stream.active,
+                              videoTrackCount: videoTracks.length,
+                              videoTrackStates: videoTracks.map(t => ({
+                                id: t.id,
+                                enabled: t.enabled,
+                                muted: t.muted,
+                                readyState: t.readyState
+                              }))
+                            })
+
+                            // Force reload by removing and re-adding srcObject
+                            const tempStream = videoEl.srcObject
+                            videoEl.srcObject = null
+                            setTimeout(() => {
+                              videoEl.srcObject = tempStream
+                              videoEl.load()
+                              videoEl.play()
+                                .then(() => {
+                                  console.log('✅ Video reloaded and playing')
+                                  this.setVideoReady(true)
+                                  this.updateVideoElement()
+                                })
+                                .catch(err => {
+                                  console.warn('⚠️ Reload play failed:', err)
+                                  this.setVideoReady(true) // Still mark ready
+                                  this.updateVideoElement()
+                                })
+                            }, 50)
                           } else if (result !== false) {
                             console.log('✅ Video playback successful, marking as ready')
                             this.setVideoReady(true)
@@ -512,6 +557,18 @@ export class ZegoService {
                 if (!videoEl.srcObject && mediaStream) {
                   console.log('🔧 CRITICAL FIX: RemoteView did not attach srcObject for digital human')
                   console.log('🔧 Manually attaching MediaStream to video element...')
+
+                  // CRITICAL: Unmute video tracks in the MediaStream
+                  const videoTracks = mediaStream.getVideoTracks()
+                  console.log(`🔍 Found ${videoTracks.length} video tracks`)
+                  videoTracks.forEach((track, idx) => {
+                    console.log(`🔍 Track ${idx}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`)
+                    if (track.muted || !track.enabled) {
+                      console.log(`🔧 Enabling and unmuting video track ${idx}`)
+                      track.enabled = true
+                    }
+                  })
+
                   videoEl.srcObject = mediaStream
                   videoEl.muted = false // Ensure not muted for digital human
                   videoEl.load()
@@ -539,6 +596,44 @@ export class ZegoService {
                       this.updateVideoElement()
                     })
                     .catch(err => console.warn('⚠️ Auto-play prevented:', err))
+                } else if (videoEl.srcObject && videoEl.readyState === 0) {
+                  // CRITICAL: srcObject exists but readyState is 0 - this is the current issue!
+                  console.log('🔧 CRITICAL: Digital human video has srcObject but readyState is 0!')
+                  const stream = videoEl.srcObject as MediaStream
+                  const videoTracks = stream.getVideoTracks()
+                  console.log(`🔍 Digital human MediaStream diagnostic:`, {
+                    streamActive: stream.active,
+                    streamId: stream.id,
+                    videoTrackCount: videoTracks.length,
+                    tracks: videoTracks.map(t => ({
+                      id: t.id,
+                      enabled: t.enabled,
+                      muted: t.muted,
+                      readyState: t.readyState,
+                      label: t.label
+                    }))
+                  })
+
+                  // Strategy: Force reload by removing and re-adding srcObject
+                  console.log('🔧 Attempting srcObject reload strategy...')
+                  const tempStream = videoEl.srcObject
+                  videoEl.srcObject = null
+                  setTimeout(() => {
+                    videoEl.srcObject = tempStream
+                    videoEl.load()
+                    videoEl.play()
+                      .then(() => {
+                        console.log('✅ Digital human video reloaded and playing!')
+                        this.setVideoReady(true)
+                        this.updateVideoElement()
+                      })
+                      .catch(err => {
+                        console.warn('⚠️ Digital human reload play failed:', err)
+                        // Still mark as ready - video might play after user interaction
+                        this.setVideoReady(true)
+                        this.updateVideoElement()
+                      })
+                  }, 100)
                 } else if (videoEl.srcObject && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
                   // Everything looks good
                   console.log('✅ Digital human video element properly configured')
