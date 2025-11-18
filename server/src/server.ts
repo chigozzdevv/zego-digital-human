@@ -211,7 +211,7 @@ function uniqueStreamId(base: string) {
 // Register AI agent once per server startup (includes LLM, TTS, ASR configs)
 async function registerAgent(): Promise<string> {
   if (REGISTERED_AGENT_ID) {
-    console.log('♻️ Reusing existing agent:', REGISTERED_AGENT_ID)
+    console.log('Reusing existing agent:', REGISTERED_AGENT_ID)
     return REGISTERED_AGENT_ID
   }
 
@@ -222,17 +222,17 @@ async function registerAgent(): Promise<string> {
     ...AGENT_CONFIG
   }
   
-  console.log('➡️ RegisterAgent')
+  console.log('RegisterAgent request')
   const result = await makeZegoRequest('RegisterAgent', registerPayload)
-  console.log('⬅️ RegisterAgent:', { code: result?.Code, msg: result?.Message })
+  console.log('RegisterAgent response:', { code: result?.Code, msg: result?.Message })
 
   if (result.Code !== 0) {
-    console.error('❌ RegisterAgent failed. Message:', result.Message)
+    console.error('RegisterAgent failed. Message:', result.Message)
     throw new Error(`RegisterAgent failed: ${result.Code} ${result.Message}`)
   }
 
   REGISTERED_AGENT_ID = agentId
-  console.log('✅ Agent registered:', agentId)
+  console.log('Agent registered:', agentId)
   return agentId
 }
 
@@ -533,41 +533,12 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       status: 'Waiting for stream to start...'
     })
 
-    // Wait for digital human stream to reach "Streaming" status (status = 3)
-    const taskId = digitalHumanResult.Data?.TaskId
-    let streamingStatus = false
-    let statusCheckAttempts = 0
-    const maxStatusChecks = 30 // 30 seconds max wait
+    // Note: Skipping digital human stream status check due to ZEGO API returning "task not found" errors
+    // The client will handle the stream connection and wait for video data
+    console.log('ℹ️ Digital human stream task created. Client will wait for stream to be ready.')
 
-    while (!streamingStatus && statusCheckAttempts < maxStatusChecks) {
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second between checks
-      statusCheckAttempts++
-
-      try {
-        const statusResult = await makeZegoRequest('GetDigitalHumanStreamTaskStatus', {
-          TaskId: taskId
-        }, 'digitalhuman')
-
-        if (statusResult?.Code === 0) {
-          const status = statusResult.Data?.TaskStatus
-          console.log(`🔍 Digital human stream status check #${statusCheckAttempts}: status=${status}`)
-
-          if (status === 3) {
-            streamingStatus = true
-            console.log('✅ Digital human stream is now STREAMING')
-          } else if (status === 4 || status === 5) {
-            // Status 4 = Failed, Status 5 = Stopped
-            throw new Error(`Digital human stream task failed with status: ${status}`)
-          }
-        }
-      } catch (statusError) {
-        console.warn(`⚠️ Status check attempt ${statusCheckAttempts} failed:`, (statusError as Error)?.message)
-      }
-    }
-
-    if (!streamingStatus) {
-      console.warn('⚠️ Digital human stream did not reach Streaming status within 30s timeout, but continuing anyway...')
-    }
+    // Give the digital human service a moment to initialize
+    await new Promise(resolve => setTimeout(resolve, 2000))
 
     if (agentResult?.Data?.AgentInstanceId && digitalHumanResult?.Data?.TaskId) {
       ACTIVE_DH_TASKS.set(agentResult.Data.AgentInstanceId, digitalHumanResult.Data.TaskId)

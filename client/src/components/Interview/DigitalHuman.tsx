@@ -200,16 +200,30 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       video.addEventListener('stalled', handleWaiting)
       video.addEventListener('emptied', handleWaiting)
 
-      // Try to force video to load if it has a srcObject but readyState is 0
-      if (video.srcObject && video.readyState === 0) {
-        console.log('🔧 Video has srcObject but readyState is 0, attempting to force load...')
-        video.load()
-        video.play().catch(err => console.warn('Auto-play prevented:', err))
+      // CRITICAL FIX: Try to force video to load if it has a srcObject but readyState is 0
+      // This is the exact issue from the debug logs: hasSrcObject: false, readyState: 0
+      const checkAndForcePlay = () => {
+        if (video.srcObject && video.readyState === 0) {
+          console.log('🔧 Video has srcObject but readyState is 0, forcing load and play...')
+          video.load()
+          video.play().catch(err => console.warn('Auto-play prevented:', err))
+        } else if (video.srcObject && video.paused && video.readyState > 0) {
+          console.log('🔧 Video has srcObject and data but is paused, attempting play...')
+          video.play().catch(err => console.warn('Auto-play prevented:', err))
+        }
       }
+
+      // Check immediately
+      checkAndForcePlay()
+
+      // Also check periodically for the first few seconds
+      const checkInterval = setInterval(checkAndForcePlay, 500)
+      setTimeout(() => clearInterval(checkInterval), 3000)
 
       markReady()
 
       return () => {
+        clearInterval(checkInterval)
         video.removeEventListener('loadeddata', markReady)
         video.removeEventListener('canplay', markReady)
         video.removeEventListener('play', markReady)
@@ -399,11 +413,10 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
           <div className="flex items-center space-x-2">
             <button
               onClick={toggleVideo}
-              className={`p-2.5 rounded-full backdrop-blur-xl transition-all duration-200 border ${
-                isVideoEnabled
+              className={`p-2.5 rounded-full backdrop-blur-xl transition-all duration-200 border ${isVideoEnabled
                   ? 'bg-white/20 hover:bg-white/30 text-white border-white/20'
                   : 'bg-red-500/90 hover:bg-red-600 text-white border-red-400/50'
-              }`}
+                }`}
               title={isVideoEnabled ? 'Disable video' : 'Enable video'}
             >
               {isVideoEnabled ? (
@@ -415,11 +428,10 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
 
             <button
               onClick={toggleAudio}
-              className={`p-2.5 rounded-full backdrop-blur-xl transition-all duration-200 border ${
-                isAudioEnabled
+              className={`p-2.5 rounded-full backdrop-blur-xl transition-all duration-200 border ${isAudioEnabled
                   ? 'bg-white/20 hover:bg-white/30 text-white border-white/20'
                   : 'bg-red-500/90 hover:bg-red-600 text-white border-red-400/50'
-              }`}
+                }`}
               title={isAudioEnabled ? 'Mute audio' : 'Unmute audio'}
             >
               {isAudioEnabled ? (

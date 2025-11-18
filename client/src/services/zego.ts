@@ -34,14 +34,14 @@ export class ZegoService {
     if (this.isInitialized || this.isJoining) return
     this.isJoining = true
     try {
-      try { ZegoExpressEngine.use(VoiceChanger) } catch {}
+      try { ZegoExpressEngine.use(VoiceChanger) } catch { }
       this.zg = new ZegoExpressEngine(parseInt(config.ZEGO_APP_ID), config.ZEGO_SERVER, { scenario: 7 })
       try {
         const rtcSup = await this.zg.checkSystemRequirements('webRTC')
         const micSup = await this.zg.checkSystemRequirements('microphone')
         if (!rtcSup?.result) throw new Error('WebRTC not supported')
         if (!micSup?.result) console.warn('Microphone permission not granted yet')
-      } catch {}
+      } catch { }
       this.setupEventListeners()
       this.setupMediaElements()
       this.isInitialized = true
@@ -90,7 +90,7 @@ export class ZegoService {
         const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
         for (const stream of streamList) {
           const streamId = stream.streamID
-          try { console.log('roomStreamUpdate ADD:', streamId) } catch {}
+          try { console.log('roomStreamUpdate ADD:', streamId) } catch { }
           if (userStreamId && streamId === userStreamId) continue
           if (typeof streamId === 'string' && streamId.startsWith('zegoprobe')) continue
           if (this.isStreamPlaying(streamId)) continue
@@ -103,13 +103,13 @@ export class ZegoService {
               const a = mediaStream.getAudioTracks()?.length || 0
               console.log('Remote media tracks:', { streamId, videoTracks: v, audioTracks: a })
               this.streamTracks.set(streamId, { videoTracks: v, audioTracks: a })
-            } catch {}
+            } catch { }
             const remoteView = await (this.zg as any).createRemoteStreamView(mediaStream)
             if (remoteView) {
               // Ensure audio can start under autoplay policies; suppress unhandled rejections
               Promise.resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
                 .then((r: any) => { if (r !== false) this.audioActivated.add(streamId) })
-                .catch(() => {})
+                .catch(() => { })
               this.remoteViews.set(streamId, remoteView)
               this.markStreamPlaying(streamId)
               // Fallback: if a video track already exists, try render immediately
@@ -131,13 +131,54 @@ export class ZegoService {
                       console.log(`▶️ Attempting to play video in remoteSteamView for stream: ${streamId}`)
                       const result = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
                       console.log(`📺 RemoteView.playVideo result:`, result)
-                      if (result !== false) {
-                        console.log('✅ Video playback successful, marking as ready')
-                        this.setVideoReady(true)
-                        this.updateVideoElement()
-                      } else {
-                        console.warn('⚠️ RemoteView.playVideo returned false')
-                      }
+
+                      // CRITICAL FIX: Verify video element has srcObject attached
+                      setTimeout(() => {
+                        const videoEl = container.querySelector('video') as HTMLVideoElement
+                        if (videoEl) {
+                          console.log(`🔍 Checking video element state:`, {
+                            hasSrcObject: !!videoEl.srcObject,
+                            readyState: videoEl.readyState,
+                            paused: videoEl.paused
+                          })
+
+                          // If RemoteView didn't attach the stream, do it manually
+                          if (!videoEl.srcObject && mediaStream) {
+                            console.log('🔧 RemoteView did not attach srcObject, attaching manually...')
+                            videoEl.srcObject = mediaStream
+                            videoEl.load()
+                            videoEl.play()
+                              .then(() => {
+                                console.log('✅ Manual video playback started successfully')
+                                this.setVideoReady(true)
+                                this.updateVideoElement()
+                              })
+                              .catch(err => {
+                                console.warn('⚠️ Manual video play failed (may need user interaction):', err)
+                                // Still mark as ready since srcObject is attached
+                                this.setVideoReady(true)
+                                this.updateVideoElement()
+                              })
+                          } else if (videoEl.srcObject && videoEl.paused) {
+                            // srcObject exists but video is paused, try to play
+                            console.log('▶️ Video has srcObject but is paused, attempting play...')
+                            videoEl.play()
+                              .then(() => {
+                                console.log('✅ Video playback resumed')
+                                this.setVideoReady(true)
+                                this.updateVideoElement()
+                              })
+                              .catch(err => console.warn('⚠️ Auto-play prevented:', err))
+                          } else if (result !== false) {
+                            console.log('✅ Video playback successful, marking as ready')
+                            this.setVideoReady(true)
+                            this.updateVideoElement()
+                          }
+                        } else {
+                          console.warn('⚠️ No video element found after playVideo call')
+                        }
+                      }, 100)
+
                     } catch (err) {
                       console.warn('❌ Failed to play video in container:', err)
                     }
@@ -157,11 +198,11 @@ export class ZegoService {
       if (updateType === 'DELETE') {
         const userStreamId = this.currentUserId ? `${this.currentUserId}_stream` : null
         for (const stream of streamList) {
-          try { console.log('roomStreamUpdate DELETE:', stream.streamID) } catch {}
+          try { console.log('roomStreamUpdate DELETE:', stream.streamID) } catch { }
           if (userStreamId && stream.streamID === userStreamId) continue
-          try { this.zg!.stopPlayingStream(stream.streamID) } catch {}
+          try { this.zg!.stopPlayingStream(stream.streamID) } catch { }
           const rv = this.remoteViews.get(stream.streamID)
-          if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch {} }
+          if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch { } }
           this.remoteViews.delete(stream.streamID)
           this.streamTracks.delete(stream.streamID)
           this.unmarkStreamPlaying(stream.streamID)
@@ -172,7 +213,7 @@ export class ZegoService {
     })
 
     this.zg.on('remoteCameraStatusUpdate', (streamID: string, status: 'OPEN' | 'MUTE') => {
-      try { console.log('remoteCameraStatusUpdate:', streamID, status) } catch {}
+      try { console.log('remoteCameraStatusUpdate:', streamID, status) } catch { }
       const rv = this.remoteViews.get(streamID)
       if (!rv) return
       if (status !== 'OPEN') { this.setVideoReady(false); return }
@@ -185,12 +226,40 @@ export class ZegoService {
         }
         try {
           const result = await Promise.resolve(rv.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
-          if (result !== false) {
-            this.setVideoReady(true)
-            this.updateVideoElement()
-          } else {
-            this.setVideoReady(false)
-          }
+
+          // Verify and fix srcObject attachment
+          setTimeout(() => {
+            const videoEl = container.querySelector('video') as HTMLVideoElement
+            if (videoEl) {
+              if (!videoEl.srcObject) {
+                console.log('🔧 Camera opened but no srcObject, checking for MediaStream...')
+                // Try to get the MediaStream from the remote view or playing streams
+                const playingStreams = Array.from(this.remoteViews.entries())
+                const streamEntry = playingStreams.find(([sid]) => sid === streamID)
+                if (streamEntry) {
+                  console.log('🔧 Attempting to attach MediaStream manually...')
+                  // The MediaStream should be available from startPlayingStream
+                  this.zg?.startPlayingStream(streamID).then(ms => {
+                    if (ms && videoEl) {
+                      videoEl.srcObject = ms
+                      videoEl.load()
+                      videoEl.play().catch(err => console.warn('Auto-play prevented:', err))
+                      this.setVideoReady(true)
+                      this.updateVideoElement()
+                    }
+                  }).catch(err => console.warn('Failed to get MediaStream:', err))
+                }
+              } else if (videoEl.paused) {
+                videoEl.play().catch(err => console.warn('Auto-play prevented:', err))
+                this.setVideoReady(true)
+                this.updateVideoElement()
+              } else if (result !== false) {
+                this.setVideoReady(true)
+                this.updateVideoElement()
+              }
+            }
+          }, 100)
+
         } catch (e) {
           console.warn('playVideo failed:', e); this.setVideoReady(false)
         }
@@ -202,7 +271,7 @@ export class ZegoService {
       try {
         const payload = { state: String(result?.state || ''), streamID: String(result?.streamID || ''), errorCode: Number(result?.errorCode || 0) }
         this.playerStateListeners.forEach(cb => cb(payload))
-      } catch {}
+      } catch { }
     })
   }
 
@@ -212,7 +281,7 @@ export class ZegoService {
 
   private setVideoReady(ready: boolean): void {
     this.videoReady = ready
-    try { document.dispatchEvent(new CustomEvent('zego-digital-human-video-state', { detail: { ready } })) } catch {}
+    try { document.dispatchEvent(new CustomEvent('zego-digital-human-video-state', { detail: { ready } })) } catch { }
   }
 
   private updateVideoElement(): void {
@@ -293,11 +362,11 @@ export class ZegoService {
       this.dhVideoStreamId = null
       this.voiceEnabled = false
       for (const [sid, rv] of this.remoteViews.entries()) {
-        try { this.zg.stopPlayingStream(sid) } catch {}
-        if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch {} }
+        try { this.zg.stopPlayingStream(sid) } catch { }
+        if (rv && typeof rv.destroy === 'function') { try { rv.destroy() } catch { } }
       }
       if (this.dhRemoteView && typeof this.dhRemoteView.destroy === 'function') {
-        try { this.dhRemoteView.destroy() } catch {}
+        try { this.dhRemoteView.destroy() } catch { }
       }
       this.dhRemoteView = null
       this.remoteViews.clear(); this.playingStreamIds.clear()
@@ -329,7 +398,7 @@ export class ZegoService {
     this.dhVideoStreamId = streamId || null
     if (!streamId) {
       if (this.dhRemoteView && typeof this.dhRemoteView.destroy === 'function') {
-        try { this.dhRemoteView.destroy() } catch {}
+        try { this.dhRemoteView.destroy() } catch { }
       }
       this.dhRemoteView = null
       this.setVideoReady(false)
@@ -346,22 +415,22 @@ export class ZegoService {
     try {
       if (this.agentAudioStreamId && this.zg) {
         if (this.isStreamPlaying(this.agentAudioStreamId) && this.audioActivated.has(this.agentAudioStreamId)) {
-          Promise.resolve((this.zg as any).mutePlayStreamAudio(this.agentAudioStreamId, !this.voiceEnabled)).catch(() => {})
+          Promise.resolve((this.zg as any).mutePlayStreamAudio(this.agentAudioStreamId, !this.voiceEnabled)).catch(() => { })
         }
       } else if (this.zg) {
         for (const sid of this.remoteViews.keys()) {
           if (this.audioActivated.has(sid)) {
-            Promise.resolve((this.zg as any).mutePlayStreamAudio(sid, !this.voiceEnabled)).catch(() => {})
+            Promise.resolve((this.zg as any).mutePlayStreamAudio(sid, !this.voiceEnabled)).catch(() => { })
           }
         }
       }
-    } catch {}
+    } catch { }
   }
 
   ensureVideoContainer(): void { /* RemoteStreamView renders into #remoteSteamView */ }
 
   async unlockAutoplay(): Promise<void> {
-    try { if (this.audioElement) await this.audioElement.play().catch(() => {}) } catch {}
+    try { if (this.audioElement) await this.audioElement.play().catch(() => { }) } catch { }
   }
 
   async listAvailableStreams(): Promise<void> {
@@ -408,7 +477,7 @@ export class ZegoService {
 
         Promise.resolve(remoteView.playAudio({ enableAutoplayDialog: true }))
           .then((result: any) => { if (result !== false) this.audioActivated.add(streamId) })
-          .catch(() => {})
+          .catch(() => { })
 
         this.remoteViews.set(streamId, remoteView)
         this.markStreamPlaying(streamId)
@@ -423,16 +492,73 @@ export class ZegoService {
 
           try {
             // ZEGO's RemoteStreamView.playVideo expects a container element
+            console.log(`🎬 Starting digital human video playback for stream: ${streamId}`)
             const result = await Promise.resolve(remoteView.playVideo('remoteSteamView', { enableAutoplayDialog: false }))
-            if (result !== false) {
-              this.setVideoReady(true)
-              this.updateVideoElement()
-            } else {
-              console.warn('Digital human playVideo returned false')
-              this.setVideoReady(false)
-            }
+            console.log(`📺 Digital human playVideo result:`, result)
+
+            // CRITICAL FIX: Verify and ensure srcObject is attached
+            setTimeout(() => {
+              const videoEl = container.querySelector('video') as HTMLVideoElement
+              if (videoEl) {
+                console.log(`🔍 Digital human video element state:`, {
+                  hasSrcObject: !!videoEl.srcObject,
+                  readyState: videoEl.readyState,
+                  videoWidth: videoEl.videoWidth,
+                  videoHeight: videoEl.videoHeight,
+                  paused: videoEl.paused
+                })
+
+                // If RemoteView didn't attach the stream, do it manually
+                if (!videoEl.srcObject && mediaStream) {
+                  console.log('🔧 CRITICAL FIX: RemoteView did not attach srcObject for digital human')
+                  console.log('🔧 Manually attaching MediaStream to video element...')
+                  videoEl.srcObject = mediaStream
+                  videoEl.muted = false // Ensure not muted for digital human
+                  videoEl.load()
+
+                  // Attempt to play
+                  videoEl.play()
+                    .then(() => {
+                      console.log('✅ Digital human video playback started successfully!')
+                      this.setVideoReady(true)
+                      this.updateVideoElement()
+                    })
+                    .catch(err => {
+                      console.warn('⚠️ Digital human auto-play prevented (user interaction may be required):', err)
+                      // Still mark as ready since srcObject is attached - user can click to play
+                      this.setVideoReady(true)
+                      this.updateVideoElement()
+                    })
+                } else if (videoEl.srcObject && videoEl.paused) {
+                  // srcObject exists but video is paused, try to play
+                  console.log('▶️ Digital human video has srcObject but is paused, attempting play...')
+                  videoEl.play()
+                    .then(() => {
+                      console.log('✅ Digital human video playback resumed')
+                      this.setVideoReady(true)
+                      this.updateVideoElement()
+                    })
+                    .catch(err => console.warn('⚠️ Auto-play prevented:', err))
+                } else if (videoEl.srcObject && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                  // Everything looks good
+                  console.log('✅ Digital human video element properly configured')
+                  this.setVideoReady(true)
+                  this.updateVideoElement()
+                } else if (result !== false) {
+                  this.setVideoReady(true)
+                  this.updateVideoElement()
+                } else {
+                  console.warn('⚠️ Digital human video element in unexpected state')
+                  this.setVideoReady(false)
+                }
+              } else {
+                console.error('❌ No video element found in container after playVideo call')
+                this.setVideoReady(false)
+              }
+            }, 150) // Slightly longer delay to ensure ZEGO has time to create the element
+
           } catch (error) {
-            console.warn('Digital human playVideo failed:', error)
+            console.error('❌ Digital human playVideo failed:', error)
             this.setVideoReady(false)
           }
         }
@@ -491,7 +617,7 @@ export class ZegoService {
 }
 
 if (typeof window !== 'undefined') {
-  ;(window as any).zegoDebug = {
+  ; (window as any).zegoDebug = {
     getService: () => ZegoService.getInstance(),
     getState: () => {
       const s = ZegoService.getInstance()
