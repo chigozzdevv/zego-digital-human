@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useDigitalHuman } from '../../hooks/useDigitalHuman'
 import { Volume2, VolumeX, Video, VideoOff, Circle } from 'lucide-react'
-import { ZegoService } from '../../services/zego'
 
 interface DigitalHumanProps {
   isConnected: boolean
@@ -123,7 +122,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     let frameId = 0
     let lastCheck = 0
 
-    function pollVideoState(timestamp: number) {
+    async function pollVideoState(timestamp: number) {
       // Only check every 500ms
       if (timestamp - lastCheck < 500) {
         frameId = requestAnimationFrame(pollVideoState)
@@ -133,6 +132,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       lastCheck = timestamp
 
       try {
+        const { ZegoService } = await import('../../services/zego')
         const svc = ZegoService.getInstance()
         svc.ensureVideoContainer()
 
