@@ -570,21 +570,20 @@ export class ZegoService {
                   paused: videoEl.paused
                 })
 
+                const videoTracks = mediaStream.getVideoTracks()
+                console.log(`🔍 Found ${videoTracks.length} video tracks`)
+                videoTracks.forEach((track, idx) => {
+                  console.log(`🔍 Track ${idx}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`)
+                  if (track.muted || !track.enabled) {
+                    console.log(`🔧 Enabling and unmuting video track ${idx}`)
+                    track.enabled = true
+                  }
+                })
+
                 // If RemoteView didn't attach the stream, do it manually
                 if (!videoEl.srcObject && mediaStream) {
                   console.log('🔧 CRITICAL FIX: RemoteView did not attach srcObject for digital human')
                   console.log('🔧 Manually attaching MediaStream to video element...')
-
-                  // CRITICAL: Unmute video tracks in the MediaStream
-                  const videoTracks = mediaStream.getVideoTracks()
-                  console.log(`🔍 Found ${videoTracks.length} video tracks`)
-                  videoTracks.forEach((track, idx) => {
-                    console.log(`🔍 Track ${idx}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`)
-                    if (track.muted || !track.enabled) {
-                      console.log(`🔧 Enabling and unmuting video track ${idx}`)
-                      track.enabled = true
-                    }
-                  })
 
                   videoEl.srcObject = mediaStream
                   videoEl.muted = false // Ensure not muted for digital human
@@ -597,19 +596,7 @@ export class ZegoService {
                       this.setVideoReady(true)
                       this.updateVideoElement()
                     })
-                    .catch(err => {
-                      console.warn('⚠️ Digital human auto-play prevented (user interaction may be required):', err)
-                      // Still mark as ready since srcObject is attached - user can click to play
-                      this.setVideoReady(true)
-                      this.updateVideoElement()
-                    })
-                } else if (videoEl.srcObject && videoEl.paused) {
-                  // srcObject exists but video is paused, try to play
-                  console.log('▶️ Digital human video has srcObject but is paused, attempting play...')
-                  videoEl.play()
-                    .then(() => {
-                      console.log('✅ Digital human video playback resumed')
-                      this.setVideoReady(true)
+                    .catch(() => {
                       this.updateVideoElement()
                     })
                     .catch(err => console.warn('⚠️ Auto-play prevented:', err))
