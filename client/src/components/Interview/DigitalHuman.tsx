@@ -119,42 +119,50 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   }, [isVideoEnabled])
 
   useEffect(() => {
-    async function updateReadyState() {
-      try {
-        const { ZegoService } = await import('../../services/zego')
-        const service = ZegoService.getInstance()
-        service.ensureVideoContainer()
+    // Import at module level to avoid temporal dead zone issues
+    import('../../services/zego').then(({ ZegoService }) => {
+      const service = ZegoService.getInstance()
 
-        // Look for the video element that ZEGO creates dynamically
-        const container = document.getElementById('remoteSteamView')
-        if (container) {
-          const videoEl = container.querySelector('video') as HTMLVideoElement
-          if (videoEl) {
-            videoRef.current = videoEl
-            if (!isVideoEnabled) {
-              setVideoReady(false)
-            } else {
-              // Only mark as ready if video element has actual video data
-              const hasVideoData = videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoEl.videoWidth > 0 && videoEl.videoHeight > 0
-              setVideoReady(hasVideoData)
-            }
-          } else {
+      const checkVideoState = () => {
+        try {
+          service.ensureVideoContainer()
+
+          const container = document.getElementById('remoteSteamView')
+          if (!container) {
             setVideoReady(false)
+            return
           }
-        } else {
+
+          const videoEl = container.querySelector('video') as HTMLVideoElement
+          if (!videoEl) {
+            setVideoReady(false)
+            return
+          }
+
+          videoRef.current = videoEl
+
+          if (!isVideoEnabled) {
+            setVideoReady(false)
+            return
+          }
+
+          const hasVideoData = videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+            videoEl.videoWidth > 0 &&
+            videoEl.videoHeight > 0
+          setVideoReady(hasVideoData)
+        } catch (error) {
+          console.warn('Unable to evaluate digital human video state:', error)
           setVideoReady(false)
         }
-      } catch (error) {
-        console.warn('Unable to evaluate digital human video state:', error)
-        setVideoReady(false)
       }
-    }
 
-    updateReadyState()
+      checkVideoState()
+      const interval = setInterval(checkVideoState, 500)
 
-    // Poll for video element since ZEGO creates it dynamically
-    const interval = setInterval(() => { updateReadyState() }, 500)
-    return () => clearInterval(interval)
+      return () => clearInterval(interval)
+    }).catch(() => {
+      setVideoReady(false)
+    })
   }, [isVideoEnabled])
 
   useEffect(() => {
