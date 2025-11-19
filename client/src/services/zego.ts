@@ -589,14 +589,10 @@ export class ZegoService {
                   videoEl.muted = false // Ensure not muted for digital human
                   videoEl.load()
 
-                  // Attempt to play
                   videoEl.play()
                     .then(() => {
                       console.log('✅ Digital human video playback started successfully!')
                       this.setVideoReady(true)
-                      this.updateVideoElement()
-                    })
-                    .catch(() => {
                       this.updateVideoElement()
                     })
                     .catch(err => console.warn('⚠️ Auto-play prevented:', err))
