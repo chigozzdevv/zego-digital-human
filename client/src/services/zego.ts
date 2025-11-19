@@ -597,7 +597,6 @@ export class ZegoService {
                     })
                     .catch(err => console.warn('⚠️ Auto-play prevented:', err))
                 } else if (videoEl.srcObject && videoEl.readyState === 0) {
-                  // CRITICAL: srcObject exists but readyState is 0 - this is the current issue!
                   console.log('🔧 CRITICAL: Digital human video has srcObject but readyState is 0!')
                   const stream = videoEl.srcObject as MediaStream
                   const videoTracks = stream.getVideoTracks()
@@ -614,7 +613,6 @@ export class ZegoService {
                     }))
                   })
 
-                  // Strategy: Force reload by removing and re-adding srcObject
                   console.log('🔧 Attempting srcObject reload strategy...')
                   const tempStream = videoEl.srcObject
                   videoEl.srcObject = null
@@ -635,7 +633,6 @@ export class ZegoService {
                       })
                   }, 100)
                 } else if (videoEl.srcObject && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-                  // Everything looks good
                   console.log('✅ Digital human video element properly configured')
                   this.setVideoReady(true)
                   this.updateVideoElement()
