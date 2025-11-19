@@ -357,14 +357,6 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       </div>
 
       <style>{`
-        #remoteSteamView [id^="zg-rtc-player_"] {
-          width: 100% !important;
-          height: 100% !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-        }
-        
         #remoteSteamView video {
           width: 100% !important;
           height: 100% !important;
