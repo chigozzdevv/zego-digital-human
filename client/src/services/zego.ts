@@ -307,12 +307,6 @@ export class ZegoService {
               } else if (result !== false) {
                 this.setVideoReady(true)
                 this.updateVideoElement()
-                // Force styles
-                if (videoEl) {
-                  videoEl.style.width = '100%'
-                  videoEl.style.height = '100%'
-                  videoEl.style.objectFit = 'cover'
-                }
               }
             }
           }, 100)
@@ -562,8 +556,7 @@ export class ZegoService {
             console.log(`🎬 Starting digital human video playback for stream: ${streamId}`)
             // Pass the container element, not the ID string
             const result = await Promise.resolve(remoteView.playVideo(container, {
-              enableAutoplayDialog: false,
-              objectFit: 'cover' // Try to pass objectFit if SDK supports it
+              enableAutoplayDialog: false
             }))
             console.log(`📺 Digital human playVideo result:`, result)
 
@@ -581,6 +574,7 @@ export class ZegoService {
 
                 const videoTracks = mediaStream.getVideoTracks()
                 console.log(`🔍 Found ${videoTracks.length} video tracks`)
+
                 videoTracks.forEach((track, idx) => {
                   console.log(`🔍 Track ${idx}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`)
                   if (track.muted || !track.enabled) {
@@ -589,13 +583,13 @@ export class ZegoService {
                   }
                 })
 
+
                 // If RemoteView didn't attach the stream, do it manually
                 if (!videoEl.srcObject && mediaStream) {
                   console.log('🔧 CRITICAL FIX: RemoteView did not attach srcObject for digital human')
                   console.log('🔧 Manually attaching MediaStream to video element...')
 
                   videoEl.srcObject = mediaStream
-                  videoEl.muted = false // Ensure not muted for digital human
                   videoEl.load()
 
                   videoEl.play()
@@ -655,16 +649,6 @@ export class ZegoService {
                   this.setVideoReady(false)
                 }
 
-                // CRITICAL: Force styles on the video element
-                if (videoEl) {
-                  console.log('🔧 Enforcing video element styles: width=100%, height=100%, object-fit=cover')
-                  videoEl.style.width = '100%'
-                  videoEl.style.height = '100%'
-                  videoEl.style.objectFit = 'cover'
-                  videoEl.style.position = 'absolute'
-                  videoEl.style.top = '0'
-                  videoEl.style.left = '0'
-                }
               } else {
                 console.error('❌ No video element found in container after playVideo call')
                 this.setVideoReady(false)

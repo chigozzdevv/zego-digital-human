@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useDigitalHuman } from '../../hooks/useDigitalHuman'
 import { Volume2, VolumeX, Video, VideoOff, Circle } from 'lucide-react'
+import { ZegoService } from '../../services/zego'
 
 interface DigitalHumanProps {
   isConnected: boolean
@@ -31,9 +32,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
 
   useEffect(() => {
     let cancelled = false
-    const ensureVideoMount = async () => {
+    const ensureVideoMount = () => {
       try {
-        const { ZegoService } = await import('../../services/zego')
         if (!cancelled) {
           const service = ZegoService.getInstance()
           service.ensureVideoContainer()
@@ -52,9 +52,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     let unsubscribe: (() => void) | undefined
     let cancelled = false
 
-    const registerPlayerState = async () => {
+    const registerPlayerState = () => {
       try {
-        const { ZegoService } = await import('../../services/zego')
         if (cancelled) return
         const service = ZegoService.getInstance()
         service.ensureVideoContainer()
@@ -121,17 +120,6 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   useEffect(() => {
     let frameId = 0
     let lastCheck = 0
-    let zegoServiceInstance: any = null
-
-    // Load ZegoService once when effect mounts
-    const initZegoService = async () => {
-      try {
-        const { ZegoService } = await import('../../services/zego')
-        zegoServiceInstance = ZegoService.getInstance()
-      } catch (error) {
-        console.warn('Failed to load ZegoService:', error)
-      }
-    }
 
     function pollVideoState(timestamp: number) {
       // Only check every 500ms
@@ -143,9 +131,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       lastCheck = timestamp
 
       try {
-        if (zegoServiceInstance) {
-          zegoServiceInstance.ensureVideoContainer()
-        }
+        const svc = ZegoService.getInstance()
+        svc.ensureVideoContainer()
 
         const cont = document.getElementById('remoteSteamView')
         const vid = cont?.querySelector('video') as HTMLVideoElement | null
@@ -164,10 +151,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       frameId = requestAnimationFrame(pollVideoState)
     }
 
-    // Initialize ZegoService and start polling
-    initZegoService().then(() => {
-      frameId = requestAnimationFrame(pollVideoState)
-    })
+    frameId = requestAnimationFrame(pollVideoState)
 
     return () => {
       if (frameId) cancelAnimationFrame(frameId)
@@ -268,27 +252,9 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   useEffect(() => {
     if (!showDebug) return
 
-    let zegoServiceInstance: any = null
-    let interval: NodeJS.Timeout | null = null
-
-    // Load ZegoService once when debug is enabled
-    const initZegoService = async () => {
-      try {
-        const { ZegoService } = await import('../../services/zego')
-        zegoServiceInstance = ZegoService.getInstance()
-      } catch (error) {
-        console.warn('Failed to load ZegoService for debug:', error)
-      }
-    }
-
     const updateDebugInfo = () => {
       try {
-        if (!zegoServiceInstance) {
-          setDebugInfo({ error: 'ZegoService not loaded yet' })
-          return
-        }
-
-        const service = zegoServiceInstance
+        const service = ZegoService.getInstance()
         const videoEl = service.getVideoElement()
 
         const container = document.getElementById('remoteSteamView')
@@ -354,15 +320,9 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       }
     }
 
-    // Initialize ZegoService then start interval
-    initZegoService().then(() => {
-      updateDebugInfo()
-      interval = setInterval(updateDebugInfo, 1000)
-    })
-
-    return () => {
-      if (interval) clearInterval(interval)
-    }
+    updateDebugInfo()
+    const interval = setInterval(updateDebugInfo, 1000)
+    return () => clearInterval(interval)
   }, [showDebug, isConnected, isVideoEnabled, isAudioEnabled, videoReady, agentStatus])
 
   const showPlaceholder = false
@@ -398,31 +358,20 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
 
       <style>{`
         #remoteSteamView {
-          display: block !important;
-          width: 100% !important;
-          height: 100% !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-          z-index: 0 !important;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         
         #remoteSteamView > div {
-          width: 100% !important;
-          height: 100% !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
+          width: 100%;
+          height: 100%;
         }
         
         #remoteSteamView video {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-          display: block !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
       `}</style>
 
