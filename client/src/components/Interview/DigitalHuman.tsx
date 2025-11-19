@@ -176,7 +176,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     const videoEl = findAndAttachListeners()
     if (!videoEl) {
       // Retry finding the video element
-      const retryInterval = setInterval(() => {
+      const retryInterval = setInterval(function () {
         const found = findAndAttachListeners()
         if (found) {
           clearInterval(retryInterval)
@@ -222,8 +222,8 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       checkAndForcePlay()
 
       // Also check periodically for the first few seconds
-      checkInterval = setInterval(checkAndForcePlay, 500)
-      setTimeout(() => {
+      checkInterval = setInterval(function () { checkAndForcePlay() }, 500)
+      setTimeout(function () {
         if (checkInterval) clearInterval(checkInterval)
       }, 3000)
 
