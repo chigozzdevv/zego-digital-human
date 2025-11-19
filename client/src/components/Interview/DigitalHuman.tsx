@@ -119,7 +119,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   }, [isVideoEnabled])
 
   useEffect(() => {
-    const updateReadyState = async () => {
+    async function updateReadyState() {
       try {
         const { ZegoService } = await import('../../services/zego')
         const service = ZegoService.getInstance()
@@ -153,7 +153,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
     updateReadyState()
 
     // Poll for video element since ZEGO creates it dynamically
-    const interval = setInterval(updateReadyState, 500)
+    const interval = setInterval(() => { updateReadyState() }, 500)
     return () => clearInterval(interval)
   }, [isVideoEnabled])
 
