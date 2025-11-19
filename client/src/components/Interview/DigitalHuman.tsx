@@ -268,10 +268,27 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   useEffect(() => {
     if (!showDebug) return
 
-    const updateDebugInfo = async () => {
+    let zegoServiceInstance: any = null
+    let interval: NodeJS.Timeout | null = null
+
+    // Load ZegoService once when debug is enabled
+    const initZegoService = async () => {
       try {
         const { ZegoService } = await import('../../services/zego')
-        const service = ZegoService.getInstance()
+        zegoServiceInstance = ZegoService.getInstance()
+      } catch (error) {
+        console.warn('Failed to load ZegoService for debug:', error)
+      }
+    }
+
+    const updateDebugInfo = () => {
+      try {
+        if (!zegoServiceInstance) {
+          setDebugInfo({ error: 'ZegoService not loaded yet' })
+          return
+        }
+
+        const service = zegoServiceInstance
         const videoEl = service.getVideoElement()
 
         const container = document.getElementById('remoteSteamView')
@@ -337,9 +354,15 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       }
     }
 
-    updateDebugInfo()
-    const interval = setInterval(updateDebugInfo, 1000)
-    return () => clearInterval(interval)
+    // Initialize ZegoService then start interval
+    initZegoService().then(() => {
+      updateDebugInfo()
+      interval = setInterval(updateDebugInfo, 1000)
+    })
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
   }, [showDebug, isConnected, isVideoEnabled, isAudioEnabled, videoReady, agentStatus])
 
   const showPlaceholder = false
