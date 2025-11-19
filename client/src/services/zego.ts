@@ -307,6 +307,12 @@ export class ZegoService {
               } else if (result !== false) {
                 this.setVideoReady(true)
                 this.updateVideoElement()
+                // Force styles
+                if (videoEl) {
+                  videoEl.style.width = '100%'
+                  videoEl.style.height = '100%'
+                  videoEl.style.objectFit = 'cover'
+                }
               }
             }
           }, 100)
@@ -555,7 +561,10 @@ export class ZegoService {
           try {
             console.log(`🎬 Starting digital human video playback for stream: ${streamId}`)
             // Pass the container element, not the ID string
-            const result = await Promise.resolve(remoteView.playVideo(container, { enableAutoplayDialog: false }))
+            const result = await Promise.resolve(remoteView.playVideo(container, {
+              enableAutoplayDialog: false,
+              objectFit: 'cover' // Try to pass objectFit if SDK supports it
+            }))
             console.log(`📺 Digital human playVideo result:`, result)
 
             // CRITICAL FIX: Verify and ensure srcObject is attached
@@ -636,12 +645,25 @@ export class ZegoService {
                   console.log('✅ Digital human video element properly configured')
                   this.setVideoReady(true)
                   this.updateVideoElement()
+                  this.setVideoReady(true)
+                  this.updateVideoElement()
                 } else if (result !== false) {
                   this.setVideoReady(true)
                   this.updateVideoElement()
                 } else {
                   console.warn('⚠️ Digital human video element in unexpected state')
                   this.setVideoReady(false)
+                }
+
+                // CRITICAL: Force styles on the video element
+                if (videoEl) {
+                  console.log('🔧 Enforcing video element styles: width=100%, height=100%, object-fit=cover')
+                  videoEl.style.width = '100%'
+                  videoEl.style.height = '100%'
+                  videoEl.style.objectFit = 'cover'
+                  videoEl.style.position = 'absolute'
+                  videoEl.style.top = '0'
+                  videoEl.style.left = '0'
                 }
               } else {
                 console.error('❌ No video element found in container after playVideo call')
