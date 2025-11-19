@@ -360,7 +360,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
         #remoteSteamView video {
           width: 100% !important;
           height: 100% !important;
-          object-fit: cover !important;
+          object-fit: contain !important;
           display: block !important;
         }
       `}</style>
