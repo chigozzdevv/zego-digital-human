@@ -357,16 +357,24 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       </div>
 
       <style>{`
+        #remoteSteamView {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        
         #remoteSteamView > div {
+          max-width: 100% !important;
+          max-height: calc(100vw * 9 / 16) !important;
           width: 100% !important;
-          height: 100% !important;
+          height: auto !important;
+          aspect-ratio: 16 / 9 !important;
         }
         
         #remoteSteamView video {
           width: 100% !important;
           height: 100% !important;
-          object-fit: cover !important;
-          object-position: center !important;
+          object-fit: contain !important;
           display: block !important;
         }
       `}</style>
