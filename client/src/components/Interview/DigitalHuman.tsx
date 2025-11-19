@@ -121,8 +121,19 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   useEffect(() => {
     let frameId = 0
     let lastCheck = 0
+    let zegoServiceInstance: any = null
 
-    async function pollVideoState(timestamp: number) {
+    // Load ZegoService once when effect mounts
+    const initZegoService = async () => {
+      try {
+        const { ZegoService } = await import('../../services/zego')
+        zegoServiceInstance = ZegoService.getInstance()
+      } catch (error) {
+        console.warn('Failed to load ZegoService:', error)
+      }
+    }
+
+    function pollVideoState(timestamp: number) {
       // Only check every 500ms
       if (timestamp - lastCheck < 500) {
         frameId = requestAnimationFrame(pollVideoState)
@@ -132,9 +143,9 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       lastCheck = timestamp
 
       try {
-        const { ZegoService } = await import('../../services/zego')
-        const svc = ZegoService.getInstance()
-        svc.ensureVideoContainer()
+        if (zegoServiceInstance) {
+          zegoServiceInstance.ensureVideoContainer()
+        }
 
         const cont = document.getElementById('remoteSteamView')
         const vid = cont?.querySelector('video') as HTMLVideoElement | null
@@ -153,7 +164,10 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       frameId = requestAnimationFrame(pollVideoState)
     }
 
-    frameId = requestAnimationFrame(pollVideoState)
+    // Initialize ZegoService and start polling
+    initZegoService().then(() => {
+      frameId = requestAnimationFrame(pollVideoState)
+    })
 
     return () => {
       if (frameId) cancelAnimationFrame(frameId)
