@@ -121,47 +121,67 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
 
   useEffect(() => {
     const service = ZegoService.getInstance()
-    let intervalId: NodeJS.Timeout | null = null
-
-    const checkVideoState = () => {
-      try {
-        service.ensureVideoContainer()
-
-        const container = document.getElementById('remoteSteamView')
-        if (!container) {
-          setVideoReady(false)
-          return
-        }
-
+    service.ensureVideoContainer()
+    
+    // Initial check
+    try {
+      const container = document.getElementById('remoteSteamView')
+      if (container) {
         const videoEl = container.querySelector('video') as HTMLVideoElement
-        if (!videoEl) {
+        if (videoEl) {
+          videoRef.current = videoEl
+          if (isVideoEnabled) {
+            const hasVideoData = videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && 
+                                 videoEl.videoWidth > 0 && 
+                                 videoEl.videoHeight > 0
+            setVideoReady(hasVideoData)
+          } else {
+            setVideoReady(false)
+          }
+        } else {
+          setVideoReady(false)
+        }
+      } else {
+        setVideoReady(false)
+      }
+    } catch (error) {
+      console.warn('Unable to evaluate digital human video state:', error)
+      setVideoReady(false)
+    }
+    
+    // Poll with completely inlined callback
+    const intervalId = setInterval(function() {
+      try {
+        const svc = ZegoService.getInstance()
+        svc.ensureVideoContainer()
+        
+        const cont = document.getElementById('remoteSteamView')
+        if (!cont) {
           setVideoReady(false)
           return
         }
-
-        videoRef.current = videoEl
-
+        
+        const vid = cont.querySelector('video') as HTMLVideoElement
+        if (!vid) {
+          setVideoReady(false)
+          return
+        }
+        
+        videoRef.current = vid
+        
         if (!isVideoEnabled) {
           setVideoReady(false)
           return
         }
-
-        const hasVideoData = videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-          videoEl.videoWidth > 0 &&
-          videoEl.videoHeight > 0
-        setVideoReady(hasVideoData)
-      } catch (error) {
-        console.warn('Unable to evaluate digital human video state:', error)
+        
+        const hasData = vid.readyState >= 2 && vid.videoWidth > 0 && vid.videoHeight > 0
+        setVideoReady(hasData)
+      } catch (err) {
         setVideoReady(false)
       }
-    }
-
-    checkVideoState()
-    intervalId = setInterval(checkVideoState, 500)
-
-    return () => {
-      if (intervalId) clearInterval(intervalId)
-    }
+    }, 500)
+    
+    return () => clearInterval(intervalId)
   }, [isVideoEnabled])
 
   useEffect(() => {
