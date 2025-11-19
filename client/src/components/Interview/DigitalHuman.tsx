@@ -120,68 +120,44 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
   }, [isVideoEnabled])
 
   useEffect(() => {
-    const service = ZegoService.getInstance()
-    service.ensureVideoContainer()
-    
-    // Initial check
-    try {
-      const container = document.getElementById('remoteSteamView')
-      if (container) {
-        const videoEl = container.querySelector('video') as HTMLVideoElement
-        if (videoEl) {
-          videoRef.current = videoEl
-          if (isVideoEnabled) {
-            const hasVideoData = videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && 
-                                 videoEl.videoWidth > 0 && 
-                                 videoEl.videoHeight > 0
-            setVideoReady(hasVideoData)
-          } else {
-            setVideoReady(false)
-          }
-        } else {
-          setVideoReady(false)
-        }
-      } else {
-        setVideoReady(false)
+    let frameId = 0
+    let lastCheck = 0
+
+    function pollVideoState(timestamp: number) {
+      // Only check every 500ms
+      if (timestamp - lastCheck < 500) {
+        frameId = requestAnimationFrame(pollVideoState)
+        return
       }
-    } catch (error) {
-      console.warn('Unable to evaluate digital human video state:', error)
-      setVideoReady(false)
-    }
-    
-    // Poll with completely inlined callback
-    const intervalId = setInterval(function() {
+
+      lastCheck = timestamp
+
       try {
         const svc = ZegoService.getInstance()
         svc.ensureVideoContainer()
-        
+
         const cont = document.getElementById('remoteSteamView')
-        if (!cont) {
+        const vid = cont?.querySelector('video') as HTMLVideoElement | null
+
+        if (vid && isVideoEnabled) {
+          videoRef.current = vid
+          const ready = vid.readyState >= 2 && vid.videoWidth > 0 && vid.videoHeight > 0
+          setVideoReady(ready)
+        } else {
           setVideoReady(false)
-          return
         }
-        
-        const vid = cont.querySelector('video') as HTMLVideoElement
-        if (!vid) {
-          setVideoReady(false)
-          return
-        }
-        
-        videoRef.current = vid
-        
-        if (!isVideoEnabled) {
-          setVideoReady(false)
-          return
-        }
-        
-        const hasData = vid.readyState >= 2 && vid.videoWidth > 0 && vid.videoHeight > 0
-        setVideoReady(hasData)
-      } catch (err) {
+      } catch {
         setVideoReady(false)
       }
-    }, 500)
-    
-    return () => clearInterval(intervalId)
+
+      frameId = requestAnimationFrame(pollVideoState)
+    }
+
+    frameId = requestAnimationFrame(pollVideoState)
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId)
+    }
   }, [isVideoEnabled])
 
   useEffect(() => {
