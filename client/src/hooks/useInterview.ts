@@ -143,6 +143,8 @@ export const useInterview = () => {
   const pendingVoiceMessageRef = useRef<Message | null>(null)
   const agentSpeakingRef = useRef(false)
   const agentStatusRef = useRef<InterviewState['agentStatus']>('idle')
+  const speakingSilenceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const lastAgentSoundTsRef = useRef<number>(0)
   const latestSessionRef = useRef<ChatSession | null>(null)
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
@@ -157,6 +159,9 @@ export const useInterview = () => {
     }
     if (voiceDebounceRef.current) {
       clearTimeout(voiceDebounceRef.current)
+    }
+    if (speakingSilenceTimeoutRef.current) {
+      clearTimeout(speakingSilenceTimeoutRef.current)
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
@@ -183,57 +188,60 @@ export const useInterview = () => {
 
   useEffect(() => {
     const service = zegoService.current
-    const unsubscribe = service.onPlayerStateUpdate(({ state, streamID, errorCode }) => {
+    const unsubscribe = service.onSoundLevelUpdate(({ streamID, soundLevel }) => {
       const session = latestSessionRef.current
       if (!session) return
+      if (!isConnectedRef.current) return
 
       const candidateLocalId = service.getCurrentUserId()
       const localStreamId = candidateLocalId ? `${candidateLocalId}_stream` : null
       if (localStreamId && streamID === localStreamId) return
 
-      const candidateStreams = [session.agentStreamId, session.digitalHumanVideoStreamId].filter(Boolean) as string[]
-      if (candidateStreams.length > 0 && !candidateStreams.includes(streamID)) return
+      const level = Number.isFinite(soundLevel) ? soundLevel : 0
+      const speakingThreshold = 10
+      const now = Date.now()
 
-      const rawState = state
-      const strState = String(rawState)
-      const normalized = strState.toUpperCase()
+      if (level >= speakingThreshold) {
+        lastAgentSoundTsRef.current = now
 
-      const activeStates = ['PLAYING', 'PLAY_START', 'PLAY_REQUESTING']
-      const stoppedStates = ['NO_PLAY', 'PLAY_STOP', 'PLAY_FAIL']
-
-      let isActive = activeStates.includes(normalized) && errorCode === 0
-      let isStopped = stoppedStates.includes(normalized) || errorCode !== 0
-
-      const numeric = typeof rawState === 'number' ? rawState : Number.isNaN(Number(strState)) ? null : Number(strState)
-      if (numeric !== null) {
-        if (numeric === 1 && errorCode === 0) {
-          isActive = true
-          isStopped = false
-        } else if (numeric === 0) {
-          isStopped = true
-          if (!stoppedStates.includes(normalized)) {
-            isActive = false
+        if (!agentSpeakingRef.current) {
+          agentSpeakingRef.current = true
+          if (agentStatusRef.current !== 'speaking') {
+            agentStatusRef.current = 'speaking'
+            dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
           }
         }
-      }
 
-      if (isActive) {
-        agentSpeakingRef.current = true
-        if (agentStatusRef.current !== 'speaking') {
-          agentStatusRef.current = 'speaking'
-          dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+        if (speakingSilenceTimeoutRef.current) {
+          clearTimeout(speakingSilenceTimeoutRef.current)
+          speakingSilenceTimeoutRef.current = undefined
         }
-      } else if (isStopped) {
-        agentSpeakingRef.current = false
-        if (agentStatusRef.current === 'speaking') {
-          agentStatusRef.current = 'listening'
-          dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+      } else {
+        if (!agentSpeakingRef.current) return
+
+        const silenceWindowMs = 800
+        if (speakingSilenceTimeoutRef.current) {
+          clearTimeout(speakingSilenceTimeoutRef.current)
         }
+        speakingSilenceTimeoutRef.current = setTimeout(() => {
+          const sinceLast = Date.now() - lastAgentSoundTsRef.current
+          if (sinceLast >= silenceWindowMs - 50) {
+            agentSpeakingRef.current = false
+            if (agentStatusRef.current === 'speaking') {
+              agentStatusRef.current = 'listening'
+              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+            }
+          }
+        }, silenceWindowMs)
       }
     })
 
     return () => {
       unsubscribe()
+      if (speakingSilenceTimeoutRef.current) {
+        clearTimeout(speakingSilenceTimeoutRef.current)
+        speakingSilenceTimeoutRef.current = undefined
+      }
     }
   }, [])
 

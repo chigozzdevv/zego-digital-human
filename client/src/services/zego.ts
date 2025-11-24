@@ -15,6 +15,7 @@ export class ZegoService {
   private videoElement: HTMLVideoElement | null = null
   private messageCallback: ((message: any) => void) | null = null
   private playerStateListeners = new Set<(payload: { state: string; streamID: string; errorCode: number }) => void>()
+  private soundLevelListeners = new Set<(payload: { streamID: string; soundLevel: number }) => void>()
   private videoReady = false
   private dhVideoStreamId: string | null = null
   private dhRemoteView: any = null
@@ -318,6 +319,22 @@ export class ZegoService {
       tryPlay()
     })
 
+    try {
+      this.zg.setSoundLevelDelegate(true, 200)
+    } catch { }
+
+    this.zg.on('soundLevelUpdate', (streamList: any[]) => {
+      try {
+        (streamList || []).forEach((item: any) => {
+          const payload = {
+            streamID: String(item?.streamID || ''),
+            soundLevel: Number(item?.soundLevel ?? item?.level ?? 0)
+          }
+          this.soundLevelListeners.forEach(cb => cb(payload))
+        })
+      } catch { }
+    })
+
     this.zg.on('playerStateUpdate', (result: any) => {
       try {
         const payload = {
@@ -441,6 +458,11 @@ export class ZegoService {
     return () => { this.playerStateListeners.delete(callback) }
   }
 
+  onSoundLevelUpdate(callback: (payload: { streamID: string; soundLevel: number }) => void): () => void {
+    this.soundLevelListeners.add(callback)
+    return () => { this.soundLevelListeners.delete(callback) }
+  }
+
   getCurrentRoomId(): string | null { return this.currentRoomId }
   getCurrentUserId(): string | null { return this.currentUserId }
   getEngine(): ZegoExpressEngine | null { return this.zg }
@@ -510,6 +532,7 @@ export class ZegoService {
       this.audioElement = null
       this.videoElement = null
       this.playerStateListeners.clear()
+      this.soundLevelListeners.clear()
       this.setVideoReady(false)
       this.dhVideoStreamId = null
       this.voiceEnabled = false
