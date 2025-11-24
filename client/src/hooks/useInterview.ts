@@ -290,13 +290,20 @@ export const useInterview = () => {
 
             llmBuffers.current.delete(MessageId)
 
-            const speakingTime = Math.min(ordered.length * 80, 10000) // Cap at 10s max extra wait
+            const speakingTime = Math.min(ordered.length * 50, 10000)
+
+            console.log('🎤 Agent finished generating text. Scheduling mic open:', {
+              textLength: ordered.length,
+              speakingTimeMs: speakingTime,
+              content: ordered.slice(0, 50) + '...'
+            })
 
             if (speakingTimeoutRef.current) {
               clearTimeout(speakingTimeoutRef.current)
             }
 
             speakingTimeoutRef.current = setTimeout(() => {
+              console.log('🎤 Speaking timeout reached. Switching to listening.')
               dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
             }, speakingTime)
 
@@ -321,9 +328,10 @@ export const useInterview = () => {
                 }
               })
             }
+
+          
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
 
-            // Fallback: if we stop receiving LLM chunks, assume the agent finished speaking
             if (speakingTimeoutRef.current) {
               clearTimeout(speakingTimeoutRef.current)
             }
