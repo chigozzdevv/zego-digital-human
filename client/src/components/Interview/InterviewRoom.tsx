@@ -4,7 +4,7 @@ import { DigitalHuman } from './DigitalHuman'
 import { ChatPanel } from './ChatPanel'
 import { Button } from '../UI/Button'
 import { useInterview } from '../../hooks/useInterview'
-import { PhoneOff, Clock, Sparkles } from 'lucide-react'
+import { PhoneOff, Clock } from 'lucide-react'
 
 interface InterviewRoomProps {
   onComplete: (data: any) => void
@@ -26,6 +26,16 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
   } = useInterview()
 
   useEffect(() => {
+    const initInterview = async () => {
+      await startInterview()
+      try {
+        await import('../../services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
+      } catch { }
+    }
+    initInterview()
+  }, [])
+
+  useEffect(() => {
     if (!isConnected) return
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => clearInterval(interval)
@@ -44,13 +54,6 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     onComplete(interviewData)
   }, [isInterviewComplete, startTime, questionsAsked, messages, onComplete])
 
-  const handleStartInterview = useCallback(async () => {
-    await startInterview()
-    try {
-      await import('../../services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
-    } catch { }
-  }, [startInterview])
-
   const formatDuration = useCallback((current: number) => {
     if (!startTime) return '0:00'
     const seconds = Math.floor((current - startTime) / 1000)
@@ -60,7 +63,8 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
   }, [startTime])
 
   const statusDisplay = useMemo(() => {
-    if (!isConnected) return { text: 'Ready to begin', color: 'text-slate-400' }
+    if (isLoading) return { text: 'Connecting...', color: 'text-blue-500' }
+    if (!isConnected) return { text: 'Connecting...', color: 'text-blue-500' }
     if (isInterviewComplete) return { text: 'Interview completed', color: 'text-emerald-500' }
 
     const statusMap = {
@@ -71,7 +75,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     }
 
     return statusMap[agentStatus]
-  }, [isConnected, isInterviewComplete, agentStatus])
+  }, [isConnected, isInterviewComplete, agentStatus, isLoading])
 
   return (
     <div className="h-screen flex flex-col bg-slate-950">
@@ -82,16 +86,11 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
       >
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-violet-600 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-white">AI Interview</h1>
-                <p className={`text-sm font-medium ${statusDisplay.color}`}>
-                  {statusDisplay.text}
-                </p>
-              </div>
+            <div>
+              <h1 className="text-lg font-bold text-white">AI Interview</h1>
+              <p className={`text-sm font-medium ${statusDisplay.color}`}>
+                {statusDisplay.text}
+              </p>
             </div>
 
             <div className="flex items-center space-x-4">
@@ -107,30 +106,18 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
                       Q{questionsAsked}
                     </span>
                   </div>
-                </>
-              )}
 
-              {isConnected ? (
-                <Button
-                  onClick={endInterview}
-                  variant="secondary"
-                  size="sm"
-                  disabled={isLoading}
-                  className="bg-slate-800 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border-slate-700"
-                >
-                  <PhoneOff className="w-4 h-4 mr-2" />
-                  End
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleStartInterview}
-                  isLoading={isLoading}
-                  size="sm"
-                  className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Start Interview
-                </Button>
+                  <Button
+                    onClick={endInterview}
+                    variant="secondary"
+                    size="sm"
+                    disabled={isLoading}
+                    className="bg-slate-800 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border-slate-700"
+                  >
+                    <PhoneOff className="w-4 h-4 mr-2" />
+                    End
+                  </Button>
+                </>
               )}
             </div>
           </div>
