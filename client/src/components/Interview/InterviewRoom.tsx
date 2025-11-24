@@ -152,8 +152,8 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
         </div>
       </motion.header>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        <div className="w-full lg:w-1/2 relative">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+        <div className="w-full lg:w-1/2 relative flex flex-col min-h-0">
           <DigitalHuman
             isConnected={isConnected}
             agentStatus={agentStatus}
@@ -161,7 +161,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
           />
         </div>
 
-        <div className="w-full lg:w-1/2 border-t lg:border-t-0 lg:border-l border-slate-800 flex">
+        <div className="w-full lg:w-1/2 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col min-h-0">
           <ChatPanel
             messages={messages}
             isTyping={agentStatus === 'thinking' || agentStatus === 'speaking'}
