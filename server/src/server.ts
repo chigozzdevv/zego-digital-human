@@ -339,12 +339,6 @@ app.post('/api/start', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/start-digital-human', async (req: Request, res: Response): Promise<void> => {
   try {
     const { room_id, user_id, user_stream_id, digital_human_id } = req.body
-    // Optional overrides to align with ZEGOCLOUD Digital Human API
-    const reqLayout = req.body?.layout as { Top?: number; Left?: number; Width?: number; Height?: number; Layer?: number } | undefined
-    const reqVideo = req.body?.video as { Width?: number; Height?: number; Bitrate?: number } | undefined
-    const reqAssets = req.body?.assets as Array<{ AssetType: number; AssetUrl: string; Layout: { Top: number; Left: number; Width: number; Height: number; Layer?: number } }> | undefined
-    const reqBackgroundColor = (req.body?.backgroundColor as string | undefined) || undefined
-    const reqTTL = (req.body?.ttl as number | undefined)
 
     if (!room_id || !user_id) {
       res.status(400).json({ error: 'room_id and user_id required' })
@@ -377,6 +371,12 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       return {
         AgentId: agentId,
         UserId: normalizedUserId,
+        RTC: rtc,
+        DigitalHuman: {
+          DigitalHumanId: digitalHumanId,
+          ConfigId: 'web',
+          EncodeCode: 'H264'
+        },
         MessageHistory: {
           SyncMode: 1,
           Messages: [],
@@ -384,8 +384,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         },
         AdvancedConfig: {
           InterruptMode: 0
-        },
-        RTC: rtc
+        }
       }
     }
 
@@ -405,194 +404,46 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       }
     })
 
-    // Step 2: Create AI Agent instance (voice/audio only)
+    // Step 2: Create Digital Human Agent Instance (unified API - handles both AI Agent + Digital Human video)
     let agentResult: any = null
     for (let i = 0; i < payloadAttempts.length; i++) {
       const attemptBody = payloadAttempts[i]
-      console.log(`CreateAgentInstance attempt #${i + 1}`)
+      console.log(`CreateDigitalHumanAgentInstance attempt #${i + 1}`)
       try {
-        agentResult = await makeZegoRequest('CreateAgentInstance', attemptBody, 'aiagent')
-        console.log(`CreateAgentInstance response (attempt #${i + 1}):`, JSON.stringify(agentResult, null, 2))
+        agentResult = await makeZegoRequest('CreateDigitalHumanAgentInstance', attemptBody, 'aiagent')
+        console.log(`CreateDigitalHumanAgentInstance response (attempt #${i + 1}):`, JSON.stringify(agentResult, null, 2))
         if (agentResult?.Code === 0) break
       } catch (e: any) {
-        console.warn(`CreateAgentInstance attempt #${i + 1} error:`, e?.message || e)
+        console.warn(`CreateDigitalHumanAgentInstance attempt #${i + 1} error:`, e?.message || e)
       }
     }
 
     if (!agentResult || agentResult.Code !== 0) {
-      console.error('CreateAgentInstance failed. Message:', agentResult?.Message)
+      console.error('CreateDigitalHumanAgentInstance failed. Message:', agentResult?.Message)
       res.status(400).json({
-        error: agentResult?.Message || 'Failed to create AI agent instance',
+        error: agentResult?.Message || 'Failed to create digital human agent instance',
         code: agentResult?.Code,
         requestId: agentResult?.RequestId
       })
       return
     }
 
-    console.log('AI Agent instance created:', agentResult.Data?.AgentInstanceId)
-
-    // Step 3: Create Digital Human video stream task
-    const defaultWidth = reqVideo?.Width ?? 1280
-    const defaultHeight = reqVideo?.Height ?? 720
-    const clamped = clampVideoDimensions(defaultWidth, defaultHeight)
-    const videoStreamId = uniqueStreamId(agentStreamId)
-
-    console.log('Digital human video config', {
-      requested: { width: defaultWidth, height: defaultHeight },
-      clamped
+    console.log('Digital Human Agent instance created:', {
+      agentInstanceId: agentResult.Data?.AgentInstanceId,
+      hasDigitalHumanConfig: !!agentResult.Data?.DigitalHumanConfig
     })
 
-    const digitalHumanConfig: any = {
-      DigitalHumanConfig: {
-        DigitalHumanId: digitalHumanId,
-        ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : { BackgroundColor: '#000000' }),
-        Layout: {
-          Top: 0,
-          Left: 0,
-          Width: clamped.width,
-          Height: clamped.height,
-          Layer: 0
-        }
-      },
-      RTCConfig: {
-        RoomId: roomIdRTC,
-        StreamId: videoStreamId
-      },
-      VideoConfig: {
-        Width: clamped.width,
-        Height: clamped.height,
-        Bitrate: reqVideo?.Bitrate ?? 2000000
-      }
-    }
-
-
-    if (reqAssets && Array.isArray(reqAssets) && reqAssets.length > 0) {
-      digitalHumanConfig.Assets = reqAssets
-    }
-
-    if (typeof reqTTL === 'number' && reqTTL >= 10 && reqTTL <= 86400) {
-      digitalHumanConfig.TTL = reqTTL
-    }
-
-    console.log('Creating digital human video stream task...')
-    console.log('Digital Human Config:', {
-      videoStreamId,
-      digitalHumanId,
-      roomId: roomIdRTC,
-      agentStreamId,
-      videoConfig: digitalHumanConfig.VideoConfig,
-      rtcConfig: digitalHumanConfig.RTCConfig
-    })
-    console.log('CreateDigitalHumanStreamTask')
-
-    let digitalHumanResult = await makeZegoRequest('CreateDigitalHumanStreamTask', digitalHumanConfig, 'digitalhuman')
-    console.log('CreateDigitalHumanStreamTask:', { code: digitalHumanResult?.Code, msg: digitalHumanResult?.Message, taskId: digitalHumanResult?.Data?.TaskId })
-    let createAttempts = 1
-
-    while (digitalHumanResult?.Code === 400000008 && createAttempts < MAX_DH_CREATE_RETRY) {
-      console.warn('CreateDigitalHumanStreamTask hit concurrent limit, attempting cleanup')
-      await cleanupActiveDigitalHumanTasks('concurrent_limit')
-      await new Promise(resolve => setTimeout(resolve, 800))
-      createAttempts += 1
-      digitalHumanResult = await makeZegoRequest('CreateDigitalHumanStreamTask', digitalHumanConfig, 'digitalhuman')
-    }
-
-    if (digitalHumanResult.Code !== 0) {
-      console.error('CreateDigitalHumanStreamTask failed:', {
-        code: digitalHumanResult.Code,
-        message: digitalHumanResult.Message,
-        requestId: digitalHumanResult.RequestId,
-        data: digitalHumanResult.Data
-      })
-
-      // Cleanup agent instance
-      await makeZegoRequest('DeleteAgentInstance', {
-        AgentInstanceId: agentResult.Data?.AgentInstanceId
-      }, 'aiagent').catch(console.warn)
-
-      res.status(400).json({
-        error: digitalHumanResult.Message || 'Failed to create digital human stream task',
-        code: digitalHumanResult.Code,
-        requestId: digitalHumanResult.RequestId
-      })
-      return
-    }
-
-    console.log('Digital Human video stream task created:', {
-      taskId: digitalHumanResult.Data?.TaskId,
-      videoStreamId,
-      width: digitalHumanConfig.VideoConfig.Width,
-      height: digitalHumanConfig.VideoConfig.Height,
-      status: 'Polling for stream to start...'
-    })
-
-    // Poll digital human stream task status until it's streaming (status 3)
-    const taskId = digitalHumanResult.Data?.TaskId
-    let streamReady = false
-    let pollAttempts = 0
-    const maxPollAttempts = 20 // 20 attempts * 500ms = 10 seconds max wait
-
-    console.log('🔄 Polling digital human stream task status...')
-    while (!streamReady && pollAttempts < maxPollAttempts) {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 500)) // Wait 500ms between polls
-        pollAttempts++
-
-        const statusResult = await makeZegoRequest('GetDigitalHumanStreamTaskStatus', {
-          TaskId: taskId
-        }, 'digitalhuman')
-
-        if (statusResult.Code === 0) {
-          const status = statusResult.Data?.Status
-          console.log(`📊 Digital human task status (attempt ${pollAttempts}):`, {
-            status,
-            statusText: status === 1 ? 'Initializing' : status === 2 ? 'Failed' : status === 3 ? 'Streaming' : status === 4 ? 'Stopping' : 'Unknown'
-          })
-
-          if (status === 3) {
-            // Status 3 = Streaming - the stream is now available
-            streamReady = true
-            console.log('✅ Digital human stream is now publishing!')
-            break
-          } else if (status === 2) {
-            // Status 2 = Failed
-            console.error('❌ Digital human stream task failed to initialize')
-            throw new Error(`Digital human stream task failed: ${statusResult.Data?.FailReason || 'Unknown error'}`)
-          }
-        } else {
-          console.warn(`⚠️ GetDigitalHumanStreamTaskStatus returned code ${statusResult.Code}: ${statusResult.Message}`)
-        }
-      } catch (pollError: any) {
-        console.warn(`⚠️ Status poll attempt ${pollAttempts} error:`, pollError?.message || pollError)
-        // Continue polling even if one attempt fails
-      }
-    }
-
-    if (!streamReady) {
-      console.warn('Digital human stream did not start within timeout period')
-      console.warn('Client will attempt to connect anyway - stream may start shortly')
-    }
-
-    if (agentResult?.Data?.AgentInstanceId && digitalHumanResult?.Data?.TaskId) {
-      ACTIVE_DH_TASKS.set(agentResult.Data.AgentInstanceId, digitalHumanResult.Data.TaskId)
-      ACTIVE_DH_TASK_DETAILS.set(digitalHumanResult.Data.TaskId, {
-        taskId: digitalHumanResult.Data.TaskId,
-        agentInstanceId: agentResult.Data.AgentInstanceId
-      })
-    }
+    // The unified API returns DigitalHumanConfig which the client uses to initialize the Digital Human SDK
+    const digitalHumanConfig = agentResult.Data?.DigitalHumanConfig
 
     res.json({
       success: true,
       agentInstanceId: agentResult.Data?.AgentInstanceId,
-      digitalHumanTaskId: digitalHumanResult.Data?.TaskId,
-      agentUserId,
       agentStreamId,
-      digitalHumanVideoStreamId: videoStreamId,
-      userStreamId,
-      digitalHumanId,
       roomId: roomIdRTC,
-      unifiedDigitalHuman: false,
-      note: 'agentStreamId = audio only, digitalHumanVideoStreamId = video only'
+      digitalHumanId,
+      digitalHumanConfig,  // Pass this to client for Digital Human SDK initialization
+      unifiedDigitalHuman: true  // Flag to indicate using unified API
     })
 
   } catch (error: any) {
