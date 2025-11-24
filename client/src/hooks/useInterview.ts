@@ -273,31 +273,23 @@ export const useInterview = () => {
             // Make mic-open timing very conservative so it reliably trails TTS by several seconds.
             const estimatedMs = Math.max(8000, Math.min(chars * 120 + 4000, 25000))
 
-            if (!processedMessageIds.current.has(MessageId)) {
-              const finalMsg: Message = {
-                id: MessageId,
-                content: ordered,
-                sender: 'ai',
-                timestamp: Date.now(),
-                type: 'text',
-                isStreaming: false
-              }
-              processedMessageIds.current.add(MessageId)
-              dispatch({ type: 'ADD_MESSAGE', payload: finalMsg })
+            // Treat each completed LLM answer as a new AI chat message with its own ID
+            // so previous AI messages stay in the history instead of being overwritten.
+            const finalMsg: Message = {
+              id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              content: ordered,
+              sender: 'ai',
+              timestamp: Date.now(),
+              type: 'text',
+              isStreaming: false
+            }
 
-              if (ordered.toLowerCase().includes('this concludes our interview')) {
-                setTimeout(() => {
-                  dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
-                }, 2000)
-              }
-            } else {
-              dispatch({
-                type: 'UPDATE_MESSAGE',
-                payload: {
-                  id: MessageId,
-                  updates: { content: ordered, isStreaming: false }
-                }
-              })
+            addMessageSafely(finalMsg)
+
+            if (ordered.toLowerCase().includes('this concludes our interview')) {
+              setTimeout(() => {
+                dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
+              }, 2000)
             }
 
             llmBuffers.current.delete(MessageId)
