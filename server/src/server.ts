@@ -43,7 +43,6 @@ const CONFIG = {
 let REGISTERED_AGENT_ID: string | null = null
 const ACTIVE_DH_TASKS = new Map<string, string>()
 const ACTIVE_DH_TASK_DETAILS = new Map<string, { taskId: string, agentInstanceId: string }>()
-const MAX_DH_CREATE_RETRY = 2
 
 // Agent configuration
 const AGENT_CONFIG = {
@@ -179,25 +178,6 @@ async function makeZegoRequest(action: string, body: object = {}, apiType: 'aiag
     logAxiosError('ZEGO API HTTP Error', error, { action, apiType })
     throw error
   }
-}
-
-function clampVideoDimensions(width: number, height: number) {
-  const MAX_W = 1920
-  const MAX_H = 2560
-  const MAX_PIXELS = 1920 * 1080
-  let w = Math.max(1, Math.min(MAX_W, Math.floor(width)))
-  let h = Math.max(1, Math.min(MAX_H, Math.floor(height)))
-  const pixels = w * h
-  if (pixels > MAX_PIXELS) {
-    const scale = Math.sqrt(MAX_PIXELS / pixels)
-    w = Math.max(1, Math.min(MAX_W, Math.floor(w * scale)))
-    h = Math.max(1, Math.min(MAX_H, Math.floor(h * scale)))
-    while (w * h > MAX_PIXELS && w > 1 && h > 1) {
-      if (w >= h) w--
-      else h--
-    }
-  }
-  return { width: w, height: h }
 }
 
 function uniqueStreamId(base: string) {
