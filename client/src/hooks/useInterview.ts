@@ -312,8 +312,6 @@ export const useInterview = () => {
             }
           }
 
-          // While LLM text is flowing, consider the agent "speaking".
-          // When chunks stop for a short period, switch to "listening" so the mic opens.
           dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
 
           if (speakingTimeoutRef.current) {
@@ -321,7 +319,7 @@ export const useInterview = () => {
           }
           speakingTimeoutRef.current = setTimeout(() => {
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-          }, 1500)
+          }, 3000)
         }
       } catch (error) {
         console.error('Error handling room message:', error)
