@@ -31,21 +31,12 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     questionsAsked,
     isInterviewComplete,
     startTime,
-    startInterview,
     endInterview
   } = useInterview()
 
   useEffect(() => {
-    const initInterview = async () => {
-      await startInterview()
-      try {
-        await import('../../services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
-      } catch (error) {
-        console.error('Failed to unlock autoplay for digital human:', error)
-      }
-    }
-    void initInterview()
-  }, [startInterview])
+    void startInterview()
+  }, [])
 
   useEffect(() => {
     if (!isConnected) return
@@ -59,7 +50,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     const duration = Math.floor((Date.now() - startTime) / 1000)
     const interviewData = {
       duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`,
-      questionsCount: questionsAsked,
+      questionsCount: messages.filter(m => m.sender === 'ai').length,
       responsesCount: messages.filter(m => m.sender === 'user').length,
       messages
     }
@@ -75,9 +66,21 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
   }, [startTime])
 
   const statusDisplay = useMemo(() => {
-    if (isLoading) return { text: 'Connecting...', color: 'text-blue-500' }
-    if (!isConnected) return { text: 'Connecting...', color: 'text-blue-500' }
-    if (isInterviewComplete) return { text: 'Interview completed', color: 'text-emerald-500' }
+    if (isInterviewComplete) {
+      return { text: 'Interview completed', color: 'text-emerald-500' }
+    }
+
+    if (isLoading && !isConnected) {
+      return { text: 'Connecting...', color: 'text-blue-500' }
+    }
+
+    if (isLoading && isConnected) {
+      return { text: 'Ending interview...', color: 'text-slate-400' }
+    }
+
+    if (!isConnected) {
+      return { text: 'Connecting...', color: 'text-blue-500' }
+    }
 
     const statusMap = {
       listening: { text: 'Listening...', color: 'text-emerald-500' },

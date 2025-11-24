@@ -481,7 +481,14 @@ export class ZegoService {
   ensureVideoContainer(): void { /* RemoteStreamView renders into #remoteSteamView */ }
 
   async unlockAutoplay(): Promise<void> {
-    try { if (this.audioElement) await this.audioElement.play().catch(() => { }) } catch { }
+    try {
+      if (!this.audioElement) {
+        this.setupMediaElements()
+      }
+      if (this.audioElement) {
+        await this.audioElement.play().catch(() => { })
+      }
+    } catch { }
   }
 
   async listAvailableStreams(): Promise<void> {

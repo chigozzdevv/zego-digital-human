@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { InterviewRoom, type InterviewSummary } from './components/Interview/InterviewRoom'
 import { Button } from './components/UI/Button'
 import { Bot, Video, Mic, CheckCircle } from 'lucide-react'
+import { ZegoService } from './services/zego'
 
 type AppState = 'welcome' | 'interview' | 'completed'
 
@@ -10,6 +11,12 @@ function App() {
   const [appState, setAppState] = useState<AppState>('welcome')
   const [interviewData, setInterviewData] = useState<InterviewSummary | null>(null)
   const handleStartInterview = () => {
+    try {
+      const service = ZegoService.getInstance()
+      void service.unlockAutoplay()
+    } catch (error) {
+      console.error('Failed to unlock autoplay before interview:', error)
+    }
     setAppState('interview')
   }
 

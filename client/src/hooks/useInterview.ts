@@ -383,6 +383,16 @@ export const useInterview = () => {
 
       setupMessageHandlers()
 
+      // Kick off the conversation so the AI starts the interview proactively
+      try {
+        await digitalHumanAPI.sendMessage(
+          newSession.agentInstanceId!,
+          'Please start the interview now. Greet the candidate warmly and ask your first introduction question.'
+        )
+      } catch (error) {
+        console.warn('Failed to send initial interview prompt to agent:', error)
+      }
+
       return true
     } catch (error) {
       console.error('Failed to start interview:', error)
