@@ -141,7 +141,7 @@ export const useInterview = () => {
   const questionTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const voiceDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const pendingVoiceMessageRef = useRef<Message | null>(null)
-  const speakingTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const agentSpeakingRef = useRef(false)
   const latestSessionRef = useRef<ChatSession | null>(null)
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
@@ -156,9 +156,6 @@ export const useInterview = () => {
     }
     if (voiceDebounceRef.current) {
       clearTimeout(voiceDebounceRef.current)
-    }
-    if (speakingTimeoutRef.current) {
-      clearTimeout(speakingTimeoutRef.current)
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
@@ -178,6 +175,28 @@ export const useInterview = () => {
   useEffect(() => {
     isRecordingRef.current = state.isRecording
   }, [state.isRecording])
+
+  useEffect(() => {
+    const service = zegoService.current
+    const unsubscribe = service.onPlayerStateUpdate(({ state, streamID, errorCode }) => {
+      const session = latestSessionRef.current
+      if (!session?.agentStreamId || streamID !== session.agentStreamId) return
+
+      const normalized = state.toUpperCase()
+      const activeStates = ['PLAYING', 'PLAY_OK', 'PLAY_START', 'PLAY_REQUESTING']
+      const stoppedStates = ['NO_PLAY', 'PLAY_STOP', 'PLAY_FAIL']
+
+      if (activeStates.includes(normalized) && errorCode === 0) {
+        agentSpeakingRef.current = true
+      } else if (stoppedStates.includes(normalized) || errorCode !== 0) {
+        agentSpeakingRef.current = false
+      }
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
 
   const addMessageSafely = useCallback((message: Message) => {
     if (processedMessageIds.current.has(message.id)) return
@@ -311,16 +330,6 @@ export const useInterview = () => {
               })
             }
           }
-
-          dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
-
-          if (speakingTimeoutRef.current) {
-            clearTimeout(speakingTimeoutRef.current)
-          }
-          // Use a slightly longer buffer so we don't reopen the mic while TTS is still audible
-          speakingTimeoutRef.current = setTimeout(() => {
-            dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-          }, 5000)
         }
       } catch (error) {
         console.error('Error handling room message:', error)
@@ -468,6 +477,22 @@ export const useInterview = () => {
       dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
     }
   }, [state.isConnected, state.isRecording])
+
+  useEffect(() => {
+    if (!state.isConnected) return
+
+    if (state.agentStatus === 'thinking') return
+
+    if (agentSpeakingRef.current) {
+      if (state.agentStatus !== 'speaking') {
+        dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+      }
+    } else {
+      if (state.agentStatus === 'speaking' || state.agentStatus === 'idle') {
+        dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+      }
+    }
+  }, [state.isConnected, state.agentStatus])
 
   // Auto-gate microphone based on agent speaking/listening state
   useEffect(() => {
