@@ -141,6 +141,7 @@ export const useInterview = () => {
   const questionTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const voiceDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const pendingVoiceMessageRef = useRef<Message | null>(null)
+  const speakingTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const latestSessionRef = useRef<ChatSession | null>(null)
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
@@ -155,6 +156,9 @@ export const useInterview = () => {
     }
     if (voiceDebounceRef.current) {
       clearTimeout(voiceDebounceRef.current)
+    }
+    if (speakingTimeoutRef.current) {
+      clearTimeout(speakingTimeoutRef.current)
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
@@ -285,6 +289,9 @@ export const useInterview = () => {
             }
 
             llmBuffers.current.delete(MessageId)
+            if (speakingTimeoutRef.current) {
+              clearTimeout(speakingTimeoutRef.current)
+            }
             // After the AI finishes its response, switch to listening so the mic is enabled for the user
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
           } else {
@@ -309,6 +316,15 @@ export const useInterview = () => {
               })
             }
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+
+            // Fallback: if we stop receiving LLM chunks, assume the agent finished speaking
+            
+            if (speakingTimeoutRef.current) {
+              clearTimeout(speakingTimeoutRef.current)
+            }
+            speakingTimeoutRef.current = setTimeout(() => {
+              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+            }, 1500)
           }
         }
       } catch (error) {
