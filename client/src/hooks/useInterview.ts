@@ -268,8 +268,7 @@ export const useInterview = () => {
               }
               processedMessageIds.current.add(MessageId)
               dispatch({ type: 'ADD_MESSAGE', payload: finalMsg })
-
-              // Check for interview completion
+            dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
               if (ordered.toLowerCase().includes('this concludes our interview')) {
                 setTimeout(() => {
                   dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
