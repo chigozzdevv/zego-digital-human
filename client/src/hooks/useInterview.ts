@@ -180,15 +180,20 @@ export const useInterview = () => {
     const service = zegoService.current
     const unsubscribe = service.onPlayerStateUpdate(({ state, streamID, errorCode }) => {
       const session = latestSessionRef.current
-      if (!session?.agentStreamId || streamID !== session.agentStreamId) return
+      if (!session) return
+
+      const candidateLocalId = service.getCurrentUserId()
+      const localStreamId = candidateLocalId ? `${candidateLocalId}_stream` : null
+      if (localStreamId && streamID === localStreamId) return
+
+      const candidateStreams = [session.agentStreamId, session.digitalHumanVideoStreamId].filter(Boolean) as string[]
+      if (candidateStreams.length > 0 && !candidateStreams.includes(streamID)) return
 
       const normalized = state.toUpperCase()
-      const activeStates = ['PLAYING', 'PLAY_OK', 'PLAY_START', 'PLAY_REQUESTING']
-      const stoppedStates = ['NO_PLAY', 'PLAY_STOP', 'PLAY_FAIL']
 
-      if (activeStates.includes(normalized) && errorCode === 0) {
+      if (normalized === 'PLAYING' && errorCode === 0) {
         agentSpeakingRef.current = true
-      } else if (stoppedStates.includes(normalized) || errorCode !== 0) {
+      } else if (normalized === 'NO_PLAY' || errorCode !== 0) {
         agentSpeakingRef.current = false
       }
     })
@@ -481,16 +486,12 @@ export const useInterview = () => {
   useEffect(() => {
     if (!state.isConnected) return
 
-    if (state.agentStatus === 'thinking') return
+    const isAgentSpeaking = agentSpeakingRef.current
 
-    if (agentSpeakingRef.current) {
-      if (state.agentStatus !== 'speaking') {
-        dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
-      }
-    } else {
-      if (state.agentStatus === 'speaking' || state.agentStatus === 'idle') {
-        dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-      }
+    if (isAgentSpeaking && state.agentStatus !== 'speaking') {
+      dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+    } else if (!isAgentSpeaking && state.agentStatus === 'speaking') {
+      dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
     }
   }, [state.isConnected, state.agentStatus])
 
