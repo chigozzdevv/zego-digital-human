@@ -431,11 +431,12 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
 
     console.log('AI Agent instance created:', agentResult.Data?.AgentInstanceId)
 
-    // Step 3: Create Digital Human video stream task (separate from audio agent)
+    // Use standard 16:9 aspect ratio for VideoConfig
     const defaultWidth = reqVideo?.Width ?? 1280
     const defaultHeight = reqVideo?.Height ?? 720
     const clamped = clampVideoDimensions(defaultWidth, defaultHeight)
     const videoStreamId = uniqueStreamId(agentStreamId)
+
     console.log('Digital human video config', {
       requested: { width: defaultWidth, height: defaultHeight },
       clamped
@@ -445,7 +446,8 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         DigitalHumanId: digitalHumanId,
         ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : {}),
         Layout: {
-          Top: reqLayout?.Top ?? 0,
+          // Use negative Top to shift camera view down and show upper body instead of just head
+          Top: reqLayout?.Top ?? -200,
           Left: reqLayout?.Left ?? 0,
           Width: reqLayout?.Width ?? clamped.width,
           Height: reqLayout?.Height ?? clamped.height,
@@ -463,8 +465,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       }
     }
 
-    // Only include Assets if explicitly provided by client
-    // Omitting Assets entirely - the placeholder image was causing task failures
+
     if (reqAssets && Array.isArray(reqAssets) && reqAssets.length > 0) {
       digitalHumanConfig.Assets = reqAssets
     }
