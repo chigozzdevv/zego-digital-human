@@ -33,7 +33,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
       } catch { }
     }
     initInterview()
-  }, [])
+  }, [startInterview])
 
   useEffect(() => {
     if (!isConnected) return

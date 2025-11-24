@@ -2,13 +2,35 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { InterviewRoom } from './components/Interview/InterviewRoom'
 import { Button } from './components/UI/Button'
-import { Bot, Video, Mic, CheckCircle } from 'lucide-react'
+import { Bot, Video, Mic, CheckCircle, Loader2 } from 'lucide-react'
+import { digitalHumanAPI } from './services/digitalHumanAPI'
 
 type AppState = 'welcome' | 'interview' | 'completed'
 
 function App() {
   const [appState, setAppState] = useState<AppState>('welcome')
   const [interviewData, setInterviewData] = useState<any>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+
+  const handleStartInterview = async () => {
+    setIsConnecting(true)
+    setConnectionError(null)
+
+    try {
+      const roomId = `interview_${Date.now()}`
+      const userId = `user_${Date.now()}`
+
+      await digitalHumanAPI.startInterview(roomId, userId)
+
+      setAppState('interview')
+    } catch (error) {
+      console.error('Failed to start interview:', error)
+      setConnectionError(error instanceof Error ? error.message : 'Failed to connect. Please try again.')
+    } finally {
+      setIsConnecting(false)
+    }
+  }
 
   const handleInterviewComplete = (data: any) => {
     setInterviewData(data)
@@ -17,6 +39,7 @@ function App() {
 
   const handleRestartInterview = () => {
     setInterviewData(null)
+    setConnectionError(null)
     setAppState('welcome')
   }
 
@@ -65,12 +88,26 @@ function App() {
                 </div>
               </div>
 
+              {connectionError && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-red-400 text-sm">{connectionError}</p>
+                </div>
+              )}
+
               <Button
-                onClick={() => setAppState('interview')}
+                onClick={handleStartInterview}
+                disabled={isConnecting}
                 size="lg"
-                className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white px-8 py-4 text-lg shadow-lg"
+                className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white px-8 py-4 text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Start Interview
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  'Start Interview'
+                )}
               </Button>
 
               <p className="text-sm text-slate-500 mt-6">
