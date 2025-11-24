@@ -31,6 +31,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     questionsAsked,
     isInterviewComplete,
     startTime,
+    startInterview,
     endInterview
   } = useInterview()
 
