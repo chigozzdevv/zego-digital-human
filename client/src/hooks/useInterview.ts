@@ -2,7 +2,6 @@ import { useCallback, useRef, useEffect, useReducer } from 'react'
 import type { Message, ChatSession, VoiceSettings } from '../types'
 import { ZegoService } from '../services/zego'
 import { digitalHumanAPI } from '../services/digitalHumanAPI'
-import { INTERVIEW_QUESTIONS } from '../data/questions'
 
 const generateRtcId = (prefix: string): string => {
   const timestamp = Date.now().toString(36)
@@ -153,7 +152,7 @@ export const useInterview = () => {
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
-    } catch {}
+    } catch { }
   }, [])
 
   useEffect(() => {
@@ -172,31 +171,14 @@ export const useInterview = () => {
     if (processedMessageIds.current.has(message.id)) return
     processedMessageIds.current.add(message.id)
     dispatch({ type: 'ADD_MESSAGE', payload: message })
+
+    // Auto-detect interview completion
+    if (message.sender === 'ai' && message.content.toLowerCase().includes('this concludes our interview')) {
+      setTimeout(() => {
+        dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
+      }, 2000)
+    }
   }, [])
-
-  const askNextQuestion = useCallback(() => {
-    const nextQuestionIndex = state.questionsAsked
-
-    if (nextQuestionIndex >= INTERVIEW_QUESTIONS.length) {
-      dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
-      dispatch({ type: 'SET_CURRENT_QUESTION', payload: '' })
-      return
-    }
-
-    const nextQuestion = INTERVIEW_QUESTIONS[nextQuestionIndex]
-    dispatch({ type: 'SET_CURRENT_QUESTION', payload: nextQuestion })
-    dispatch({ type: 'INCREMENT_QUESTIONS_ASKED' })
-
-    if (state.session?.agentInstanceId) {
-      questionTimeoutRef.current = setTimeout(async () => {
-        try {
-          await digitalHumanAPI.sendMessage(state.session!.agentInstanceId!, nextQuestion)
-        } catch (error) {
-          console.error('Failed to send question:', error)
-        }
-      }, 1000)
-    }
-  }, [state.questionsAsked, state.session?.agentInstanceId])
 
   const setupMessageHandlers = useCallback(() => {
     if (messageHandlerSetup.current) return
@@ -235,6 +217,7 @@ export const useInterview = () => {
               addMessageSafely(userMessage)
               dispatch({ type: 'SET_TRANSCRIPT', payload: '' })
               dispatch({ type: 'SET_AGENT_STATUS', payload: 'thinking' })
+              dispatch({ type: 'INCREMENT_QUESTIONS_ASKED' })
 
               asrSeqMap.current.delete(mid)
             }
@@ -266,6 +249,13 @@ export const useInterview = () => {
               }
               processedMessageIds.current.add(MessageId)
               dispatch({ type: 'ADD_MESSAGE', payload: finalMsg })
+
+              // Check for interview completion
+              if (ordered.toLowerCase().includes('this concludes our interview')) {
+                setTimeout(() => {
+                  dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
+                }, 2000)
+              }
             } else {
               dispatch({
                 type: 'UPDATE_MESSAGE',
@@ -277,8 +267,6 @@ export const useInterview = () => {
             }
             llmBuffers.current.delete(MessageId)
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
-            // Now that AI finished responding, ask the next question with a natural pause
-            setTimeout(() => askNextQuestion(), 1000)
           } else {
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
@@ -312,9 +300,9 @@ export const useInterview = () => {
     zegoService.current.onRoomMessage(handleRoomMessage)
 
     cleanupFunctions.current.push(() => {
-      zegoService.current.onRoomMessage(() => {})
+      zegoService.current.onRoomMessage(() => { })
     })
-  }, [addMessageSafely, askNextQuestion])
+  }, [addMessageSafely])
 
   const startInterview = useCallback(async (): Promise<boolean> => {
     if (state.isLoading || state.isConnected) return false
@@ -374,7 +362,7 @@ export const useInterview = () => {
         roomId: joinedRoomId
       })
 
-      setTimeout(() => askNextQuestion(), 2000)
+      setupMessageHandlers()
 
       return true
     } catch (error) {
@@ -384,7 +372,7 @@ export const useInterview = () => {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false })
     }
-  }, [state.isLoading, state.isConnected, setupMessageHandlers, askNextQuestion])
+  }, [state.isLoading, state.isConnected, setupMessageHandlers])
 
   const sendTextMessage = useCallback(async (content: string) => {
     if (!state.session?.agentInstanceId) {
@@ -411,14 +399,12 @@ export const useInterview = () => {
 
       await digitalHumanAPI.sendMessage(state.session.agentInstanceId, trimmedContent)
 
-      setTimeout(() => askNextQuestion(), 2000)
-
     } catch (error) {
       console.error('Failed to send message:', error)
       dispatch({ type: 'SET_ERROR', payload: 'Failed to send message' })
       dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
     }
-  }, [state.session, addMessageSafely, askNextQuestion])
+  }, [state.session, addMessageSafely])
 
   const toggleVoiceRecording = useCallback(async () => {
     if (!state.isConnected) return
@@ -448,7 +434,7 @@ export const useInterview = () => {
     const micShouldBeOn = state.agentStatus === 'listening'
     zegoService.current.enableMicrophone(micShouldBeOn).then((ok) => {
       if (ok) dispatch({ type: 'SET_RECORDING', payload: micShouldBeOn })
-    }).catch(() => {})
+    }).catch(() => { })
   }, [state.agentStatus, state.isConnected])
 
   const toggleVoiceSettings = useCallback(() => {
@@ -481,7 +467,7 @@ export const useInterview = () => {
         await zegoService.current.enableMicrophone(false)
         dispatch({ type: 'SET_RECORDING', payload: false })
       }
-    } catch {}
+    } catch { }
 
     try {
       if (state.session?.agentInstanceId) {
@@ -514,7 +500,7 @@ export const useInterview = () => {
       const isRecording = isRecordingRef.current
 
       if (isRecording) {
-        zegoService.current.enableMicrophone(false).catch(() => {})
+        zegoService.current.enableMicrophone(false).catch(() => { })
       }
 
       if (session?.agentInstanceId) {
@@ -541,7 +527,6 @@ export const useInterview = () => {
     sendTextMessage,
     toggleVoiceRecording,
     toggleVoiceSettings,
-    endInterview,
-    askNextQuestion
+    endInterview
   }
 }
