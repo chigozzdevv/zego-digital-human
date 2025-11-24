@@ -197,9 +197,6 @@ export const useInterview = () => {
       const localStreamId = candidateLocalId ? `${candidateLocalId}_stream` : null
       if (localStreamId && streamID === localStreamId) return
 
-       const candidateStreams = [session.agentStreamId, session.digitalHumanVideoStreamId].filter(Boolean) as string[]
-       if (candidateStreams.length > 0 && !candidateStreams.includes(streamID)) return
-
       const level = Number.isFinite(soundLevel) ? soundLevel : 0
       const speakingThreshold = 10
       const now = Date.now()
