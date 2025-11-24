@@ -562,5 +562,3 @@ export const useInterview = () => {
     endInterview
   }
 }
-
-export type UseInterviewController = ReturnType<typeof useInterview>

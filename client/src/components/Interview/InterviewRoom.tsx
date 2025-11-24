@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { DigitalHuman } from './DigitalHuman'
 import { ChatPanel } from './ChatPanel'
 import { Button } from '../UI/Button'
-import type { UseInterviewController } from '../../hooks/useInterview'
+import { useInterview } from '../../hooks/useInterview'
 import { PhoneOff, Clock } from 'lucide-react'
 import type { Message } from '../../types'
 
@@ -15,11 +15,10 @@ export interface InterviewSummary {
 }
 
 interface InterviewRoomProps {
-  controller: UseInterviewController
   onComplete: (data: InterviewSummary) => void
 }
 
-export const InterviewRoom = ({ controller, onComplete }: InterviewRoomProps) => {
+export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
   const [currentTime, setCurrentTime] = useState(Date.now())
 
   const {
@@ -32,8 +31,21 @@ export const InterviewRoom = ({ controller, onComplete }: InterviewRoomProps) =>
     questionsAsked,
     isInterviewComplete,
     startTime,
+    startInterview,
     endInterview
-  } = controller
+  } = useInterview()
+
+  useEffect(() => {
+    const initInterview = async () => {
+      await startInterview()
+      try {
+        await import('../../services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
+      } catch (error) {
+        console.error('Failed to unlock autoplay for digital human:', error)
+      }
+    }
+    void initInterview()
+  }, [startInterview])
 
   useEffect(() => {
     if (!isConnected) return
