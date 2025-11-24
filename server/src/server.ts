@@ -431,14 +431,24 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
 
     console.log('AI Agent instance created:', agentResult.Data?.AgentInstanceId)
 
-    // Use standard 16:9 aspect ratio for VideoConfig
-    const defaultWidth = reqVideo?.Width ?? 1280
-    const defaultHeight = reqVideo?.Height ?? 720
-    const clamped = clampVideoDimensions(defaultWidth, defaultHeight)
+    // Use larger canvas to render full digital human, then crop to show upper body
+    // VideoConfig = full render canvas, Layout = what portion to show
+    const renderWidth = 1920
+    const renderHeight = 1080
+    const viewportWidth = reqVideo?.Width ?? 1280
+    const viewportHeight = reqVideo?.Height ?? 720
+
+    const clamped = clampVideoDimensions(renderWidth, renderHeight)
     const videoStreamId = uniqueStreamId(agentStreamId)
 
+    // Center the viewport on the canvas to show upper body
+    const layoutTop = reqLayout?.Top ?? Math.floor((clamped.height - viewportHeight) / 2)
+    const layoutLeft = reqLayout?.Left ?? Math.floor((clamped.width - viewportWidth) / 2)
+
     console.log('Digital human video config', {
-      requested: { width: defaultWidth, height: defaultHeight },
+      renderCanvas: { width: renderWidth, height: renderHeight },
+      viewport: { width: viewportWidth, height: viewportHeight },
+      layout: { top: layoutTop, left: layoutLeft },
       clamped
     })
     const digitalHumanConfig: any = {
@@ -446,11 +456,10 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
         DigitalHumanId: digitalHumanId,
         ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : {}),
         Layout: {
-          // Use negative Top to shift camera view down and show upper body instead of just head
-          Top: reqLayout?.Top ?? -200,
-          Left: reqLayout?.Left ?? 0,
-          Width: reqLayout?.Width ?? clamped.width,
-          Height: reqLayout?.Height ?? clamped.height,
+          Top: layoutTop,
+          Left: layoutLeft,
+          Width: reqLayout?.Width ?? viewportWidth,
+          Height: reqLayout?.Height ?? viewportHeight,
           Layer: reqLayout?.Layer ?? 0
         }
       },
@@ -461,7 +470,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       VideoConfig: {
         Width: clamped.width,
         Height: clamped.height,
-        Bitrate: reqVideo?.Bitrate ?? 2000000
+        Bitrate: reqVideo?.Bitrate ?? 3000000
       }
     }
 
