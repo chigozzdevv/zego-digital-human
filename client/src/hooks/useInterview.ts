@@ -317,9 +317,10 @@ export const useInterview = () => {
           if (speakingTimeoutRef.current) {
             clearTimeout(speakingTimeoutRef.current)
           }
+          // Use a slightly longer buffer so we don't reopen the mic while TTS is still audible
           speakingTimeoutRef.current = setTimeout(() => {
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-          }, 3000)
+          }, 5000)
         }
       } catch (error) {
         console.error('Error handling room message:', error)
