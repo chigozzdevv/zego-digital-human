@@ -268,7 +268,7 @@ export const useInterview = () => {
               }
               processedMessageIds.current.add(MessageId)
               dispatch({ type: 'ADD_MESSAGE', payload: finalMsg })
-            dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+
               if (ordered.toLowerCase().includes('this concludes our interview')) {
                 setTimeout(() => {
                   dispatch({ type: 'SET_INTERVIEW_COMPLETE', payload: true })
@@ -283,8 +283,10 @@ export const useInterview = () => {
                 }
               })
             }
+
             llmBuffers.current.delete(MessageId)
-            dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
+            // After the AI finishes its response, switch to listening so the mic is enabled for the user
+            dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
           } else {
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
