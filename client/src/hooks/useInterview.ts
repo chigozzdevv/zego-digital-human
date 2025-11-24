@@ -194,13 +194,28 @@ export const useInterview = () => {
       const candidateStreams = [session.agentStreamId, session.digitalHumanVideoStreamId].filter(Boolean) as string[]
       if (candidateStreams.length > 0 && !candidateStreams.includes(streamID)) return
 
-      const normalized = state.toUpperCase()
+      const rawState = state
+      const strState = String(rawState)
+      const normalized = strState.toUpperCase()
 
       const activeStates = ['PLAYING', 'PLAY_START', 'PLAY_REQUESTING']
       const stoppedStates = ['NO_PLAY', 'PLAY_STOP', 'PLAY_FAIL']
 
-      const isActive = activeStates.includes(normalized) && errorCode === 0
-      const isStopped = stoppedStates.includes(normalized) || errorCode !== 0
+      let isActive = activeStates.includes(normalized) && errorCode === 0
+      let isStopped = stoppedStates.includes(normalized) || errorCode !== 0
+
+      const numeric = typeof rawState === 'number' ? rawState : Number.isNaN(Number(strState)) ? null : Number(strState)
+      if (numeric !== null) {
+        if (numeric === 1 && errorCode === 0) {
+          isActive = true
+          isStopped = false
+        } else if (numeric === 0) {
+          isStopped = true
+          if (!stoppedStates.includes(normalized)) {
+            isActive = false
+          }
+        }
+      }
 
       if (isActive) {
         agentSpeakingRef.current = true

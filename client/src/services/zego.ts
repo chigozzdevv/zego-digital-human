@@ -320,7 +320,11 @@ export class ZegoService {
 
     this.zg.on('playerStateUpdate', (result: any) => {
       try {
-        const payload = { state: String(result?.state || ''), streamID: String(result?.streamID || ''), errorCode: Number(result?.errorCode || 0) }
+        const payload = {
+          state: result?.state,
+          streamID: String(result?.streamID || ''),
+          errorCode: Number(result?.errorCode || 0)
+        }
         this.playerStateListeners.forEach(cb => cb(payload))
       } catch { }
     })
