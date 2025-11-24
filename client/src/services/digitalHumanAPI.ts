@@ -45,7 +45,7 @@ api.interceptors.response.use(
 )
 
 export const digitalHumanAPI = {
-  async startInterview(roomId: string, userId: string): Promise<{ agentInstanceId: string; agentStreamId?: string; digitalHumanTaskId?: string; digitalHumanVideoStreamId: string; roomId: string; digitalHumanId?: string; unifiedDigitalHuman?: boolean }> {
+  async startInterview(roomId: string, userId: string): Promise<{ agentInstanceId: string; agentStreamId?: string; digitalHumanTaskId?: string; digitalHumanVideoStreamId?: string; digitalHumanConfig?: any; roomId: string; digitalHumanId?: string; unifiedDigitalHuman?: boolean }> {
     try {
       const requestData = {
         room_id: roomId,
@@ -62,14 +62,25 @@ export const digitalHumanAPI = {
         throw new Error(response.data?.error || 'Digital human interview start failed')
       }
 
-      if (!response.data.agentInstanceId || !response.data.digitalHumanVideoStreamId) {
-        throw new Error('Missing required IDs in response')
+      // Unified API returns digitalHumanConfig, old API returns digitalHumanVideoStreamId
+      const isUnified = response.data.unifiedDigitalHuman === true
+      if (!response.data.agentInstanceId) {
+        throw new Error('Missing agentInstanceId in response')
+      }
+
+      if (!isUnified && !response.data.digitalHumanVideoStreamId) {
+        throw new Error('Missing digitalHumanVideoStreamId in response (old API)')
+      }
+
+      if (isUnified && !response.data.digitalHumanConfig) {
+        throw new Error('Missing digitalHumanConfig in response (unified API)')
       }
 
       console.log('Digital human interview started successfully:', {
         agentInstanceId: response.data.agentInstanceId,
         digitalHumanTaskId: response.data.digitalHumanTaskId || 'N/A (unified)',
-        digitalHumanVideoStreamId: response.data.digitalHumanVideoStreamId,
+        digitalHumanVideoStreamId: response.data.digitalHumanVideoStreamId || 'N/A (unified)',
+        digitalHumanConfig: response.data.digitalHumanConfig ? 'Present' : 'N/A',
         unifiedDigitalHuman: response.data.unifiedDigitalHuman
       })
 
@@ -78,6 +89,7 @@ export const digitalHumanAPI = {
         agentStreamId: response.data.agentStreamId,
         digitalHumanTaskId: response.data.digitalHumanTaskId,
         digitalHumanVideoStreamId: response.data.digitalHumanVideoStreamId,
+        digitalHumanConfig: response.data.digitalHumanConfig,
         roomId: response.data.roomId || roomId,
         digitalHumanId: response.data.digitalHumanId,
         unifiedDigitalHuman: response.data.unifiedDigitalHuman
@@ -100,7 +112,7 @@ export const digitalHumanAPI = {
       const agentResponse = await api.post('/api/stop', {
         agent_instance_id: agentInstanceId
       })
-      
+
       if (agentResponse.data?.success) {
         console.log('AI Agent stopped successfully')
       } else {
@@ -113,7 +125,7 @@ export const digitalHumanAPI = {
         const digitalHumanResponse = await api.post('/api/stop-digital-human', {
           task_id: digitalHumanTaskId
         })
-        
+
         if (digitalHumanResponse.data?.success) {
           console.log('Digital Human stream task stopped successfully')
         } else {
@@ -181,11 +193,11 @@ export const digitalHumanAPI = {
   async healthCheck(): Promise<{ status: string }> {
     try {
       console.log('Checking digital human backend health')
-      
+
       const response = await api.get('/health')
-      
+
       console.log('Digital human backend health check successful:', response.data)
-      
+
       return response.data
     } catch (error: any) {
       console.error('Digital human backend health check failed:', error.response?.data || error.message)
