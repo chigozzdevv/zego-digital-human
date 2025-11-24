@@ -431,36 +431,27 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
 
     console.log('AI Agent instance created:', agentResult.Data?.AgentInstanceId)
 
-    // Use larger canvas to render full digital human, then crop to show upper body
-    // VideoConfig = full render canvas, Layout = what portion to show
-    const renderWidth = 1920
-    const renderHeight = 1080
-    const viewportWidth = reqVideo?.Width ?? 1280
-    const viewportHeight = reqVideo?.Height ?? 720
-
-    const clamped = clampVideoDimensions(renderWidth, renderHeight)
+    // Step 3: Create Digital Human video stream task
+    const defaultWidth = reqVideo?.Width ?? 1280
+    const defaultHeight = reqVideo?.Height ?? 720
+    const clamped = clampVideoDimensions(defaultWidth, defaultHeight)
     const videoStreamId = uniqueStreamId(agentStreamId)
 
-    // Center the viewport on the canvas to show upper body
-    const layoutTop = reqLayout?.Top ?? Math.floor((clamped.height - viewportHeight) / 2)
-    const layoutLeft = reqLayout?.Left ?? Math.floor((clamped.width - viewportWidth) / 2)
-
     console.log('Digital human video config', {
-      renderCanvas: { width: renderWidth, height: renderHeight },
-      viewport: { width: viewportWidth, height: viewportHeight },
-      layout: { top: layoutTop, left: layoutLeft },
+      requested: { width: defaultWidth, height: defaultHeight },
       clamped
     })
+
     const digitalHumanConfig: any = {
       DigitalHumanConfig: {
         DigitalHumanId: digitalHumanId,
-        ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : {}),
+        ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : { BackgroundColor: '#000000' }),
         Layout: {
-          Top: layoutTop,
-          Left: layoutLeft,
-          Width: reqLayout?.Width ?? viewportWidth,
-          Height: reqLayout?.Height ?? viewportHeight,
-          Layer: reqLayout?.Layer ?? 0
+          Top: 0,
+          Left: 0,
+          Width: clamped.width,
+          Height: clamped.height,
+          Layer: 0
         }
       },
       RTCConfig: {
@@ -470,7 +461,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       VideoConfig: {
         Width: clamped.width,
         Height: clamped.height,
-        Bitrate: reqVideo?.Bitrate ?? 3000000
+        Bitrate: reqVideo?.Bitrate ?? 2000000
       }
     }
 
