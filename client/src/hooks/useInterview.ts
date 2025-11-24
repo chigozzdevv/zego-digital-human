@@ -142,6 +142,7 @@ export const useInterview = () => {
   const voiceDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const pendingVoiceMessageRef = useRef<Message | null>(null)
   const agentSpeakingRef = useRef(false)
+  const agentStatusRef = useRef<InterviewState['agentStatus']>('idle')
   const latestSessionRef = useRef<ChatSession | null>(null)
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
@@ -177,6 +178,10 @@ export const useInterview = () => {
   }, [state.isRecording])
 
   useEffect(() => {
+    agentStatusRef.current = state.agentStatus
+  }, [state.agentStatus])
+
+  useEffect(() => {
     const service = zegoService.current
     const unsubscribe = service.onPlayerStateUpdate(({ state, streamID, errorCode }) => {
       const session = latestSessionRef.current
@@ -191,10 +196,24 @@ export const useInterview = () => {
 
       const normalized = state.toUpperCase()
 
-      if (normalized === 'PLAYING' && errorCode === 0) {
+      const activeStates = ['PLAYING', 'PLAY_START', 'PLAY_REQUESTING']
+      const stoppedStates = ['NO_PLAY', 'PLAY_STOP', 'PLAY_FAIL']
+
+      const isActive = activeStates.includes(normalized) && errorCode === 0
+      const isStopped = stoppedStates.includes(normalized) || errorCode !== 0
+
+      if (isActive) {
         agentSpeakingRef.current = true
-      } else if (normalized === 'NO_PLAY' || errorCode !== 0) {
+        if (agentStatusRef.current !== 'speaking') {
+          agentStatusRef.current = 'speaking'
+          dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+        }
+      } else if (isStopped) {
         agentSpeakingRef.current = false
+        if (agentStatusRef.current === 'speaking') {
+          agentStatusRef.current = 'listening'
+          dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+        }
       }
     })
 
@@ -482,18 +501,6 @@ export const useInterview = () => {
       dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
     }
   }, [state.isConnected, state.isRecording])
-
-  useEffect(() => {
-    if (!state.isConnected) return
-
-    const isAgentSpeaking = agentSpeakingRef.current
-
-    if (isAgentSpeaking && state.agentStatus !== 'speaking') {
-      dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
-    } else if (!isAgentSpeaking && state.agentStatus === 'speaking') {
-      dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-    }
-  }, [state.isConnected, state.agentStatus])
 
   // Auto-gate microphone based on agent speaking/listening state
   useEffect(() => {
