@@ -270,8 +270,8 @@ export const useInterview = () => {
 
           if (EndFlag) {
             const chars = ordered.length
-            // Further slow down mic-open timing so it lags TTS by ~2s.
-            const estimatedMs = Math.max(6000, Math.min(chars * 90 + 2000, 20000))
+            // Make mic-open timing very conservative so it reliably trails TTS by several seconds.
+            const estimatedMs = Math.max(8000, Math.min(chars * 120 + 4000, 25000))
 
             if (!processedMessageIds.current.has(MessageId)) {
               const finalMsg: Message = {
