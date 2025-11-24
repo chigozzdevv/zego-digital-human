@@ -263,14 +263,15 @@ export const useInterview = () => {
           // Any LLM text chunk means the agent is speaking.
           dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
 
-          // Fallback: if we stop receiving chunks for a while, open mic.
+          // Always clear any previous mic-open timer before scheduling a new one.
           if (speakingTimeoutRef.current) {
             clearTimeout(speakingTimeoutRef.current)
           }
 
           if (EndFlag) {
             const chars = ordered.length
-            const estimatedMs = Math.max(3000, Math.min(chars * 55, 12000))
+            // More conservative estimate so mic opens after TTS actually finishes.
+            const estimatedMs = Math.max(5000, Math.min(chars * 80, 15000))
 
             if (!processedMessageIds.current.has(MessageId)) {
               const finalMsg: Message = {
@@ -301,32 +302,13 @@ export const useInterview = () => {
 
             llmBuffers.current.delete(MessageId)
 
+            // After the AI finishes its response text, wait conservatively before
+            // switching to listening so we don't capture the AI's own voice.
             speakingTimeoutRef.current = setTimeout(() => {
               dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
             }, estimatedMs)
           } else {
-            if (!processedMessageIds.current.has(MessageId)) {
-              const streamingMessage: Message = {
-                id: MessageId,
-                content: ordered,
-                sender: 'ai',
-                timestamp: Date.now(),
-                type: 'text',
-                isStreaming: true
-              }
-              processedMessageIds.current.add(MessageId)
-              dispatch({ type: 'ADD_MESSAGE', payload: streamingMessage })
-            } else {
-              dispatch({
-                type: 'UPDATE_MESSAGE',
-                payload: {
-                  id: MessageId,
-                  updates: { content: ordered, isStreaming: true }
-                }
-              })
-            }
 
-            // If EndFlag never arrives for some reason, still open mic after a hard timeout.
             speakingTimeoutRef.current = setTimeout(() => {
               dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
             }, 10000)
