@@ -289,24 +289,6 @@ export const useInterview = () => {
             }
 
             llmBuffers.current.delete(MessageId)
-
-            const speakingTime = Math.min(ordered.length * 50, 10000)
-
-            console.log('🎤 Agent finished generating text. Scheduling mic open:', {
-              textLength: ordered.length,
-              speakingTimeMs: speakingTime,
-              content: ordered.slice(0, 50) + '...'
-            })
-
-            if (speakingTimeoutRef.current) {
-              clearTimeout(speakingTimeoutRef.current)
-            }
-
-            speakingTimeoutRef.current = setTimeout(() => {
-              console.log('🎤 Speaking timeout reached. Switching to listening.')
-              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-            }, speakingTime)
-
           } else {
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
@@ -328,14 +310,18 @@ export const useInterview = () => {
                 }
               })
             }
-
-          
-            dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
-
-            if (speakingTimeoutRef.current) {
-              clearTimeout(speakingTimeoutRef.current)
-            }
           }
+
+          // While LLM text is flowing, consider the agent "speaking".
+          // When chunks stop for a short period, switch to "listening" so the mic opens.
+          dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+
+          if (speakingTimeoutRef.current) {
+            clearTimeout(speakingTimeoutRef.current)
+          }
+          speakingTimeoutRef.current = setTimeout(() => {
+            dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+          }, 1500)
         }
       } catch (error) {
         console.error('Error handling room message:', error)
