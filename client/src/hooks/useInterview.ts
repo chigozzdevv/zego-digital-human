@@ -289,11 +289,17 @@ export const useInterview = () => {
             }
 
             llmBuffers.current.delete(MessageId)
+
+            const speakingTime = Math.min(ordered.length * 80, 10000) // Cap at 10s max extra wait
+
             if (speakingTimeoutRef.current) {
               clearTimeout(speakingTimeoutRef.current)
             }
-            // After the AI finishes its response, switch to listening so the mic is enabled for the user
-            dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+
+            speakingTimeoutRef.current = setTimeout(() => {
+              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+            }, speakingTime)
+
           } else {
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
@@ -318,13 +324,9 @@ export const useInterview = () => {
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
 
             // Fallback: if we stop receiving LLM chunks, assume the agent finished speaking
-            
             if (speakingTimeoutRef.current) {
               clearTimeout(speakingTimeoutRef.current)
             }
-            speakingTimeoutRef.current = setTimeout(() => {
-              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-            }, 1500)
           }
         }
       } catch (error) {
