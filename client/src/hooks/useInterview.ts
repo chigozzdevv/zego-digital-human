@@ -141,10 +141,7 @@ export const useInterview = () => {
   const questionTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const voiceDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const pendingVoiceMessageRef = useRef<Message | null>(null)
-  const agentSpeakingRef = useRef(false)
-  const agentStatusRef = useRef<InterviewState['agentStatus']>('idle')
-  const speakingSilenceTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
-  const lastAgentSoundTsRef = useRef<number>(0)
+  const speakingTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const latestSessionRef = useRef<ChatSession | null>(null)
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
@@ -160,8 +157,8 @@ export const useInterview = () => {
     if (voiceDebounceRef.current) {
       clearTimeout(voiceDebounceRef.current)
     }
-    if (speakingSilenceTimeoutRef.current) {
-      clearTimeout(speakingSilenceTimeoutRef.current)
+    if (speakingTimeoutRef.current) {
+      clearTimeout(speakingTimeoutRef.current)
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
@@ -181,69 +178,6 @@ export const useInterview = () => {
   useEffect(() => {
     isRecordingRef.current = state.isRecording
   }, [state.isRecording])
-
-  useEffect(() => {
-    agentStatusRef.current = state.agentStatus
-  }, [state.agentStatus])
-
-  useEffect(() => {
-    const service = zegoService.current
-    const unsubscribe = service.onSoundLevelUpdate(({ streamID, soundLevel }) => {
-      const session = latestSessionRef.current
-      if (!session) return
-      if (!isConnectedRef.current) return
-
-      const candidateLocalId = service.getCurrentUserId()
-      const localStreamId = candidateLocalId ? `${candidateLocalId}_stream` : null
-      if (localStreamId && streamID === localStreamId) return
-
-      const level = Number.isFinite(soundLevel) ? soundLevel : 0
-      const speakingThreshold = 10
-      const now = Date.now()
-
-      if (level >= speakingThreshold) {
-        lastAgentSoundTsRef.current = now
-
-        if (!agentSpeakingRef.current) {
-          agentSpeakingRef.current = true
-          if (agentStatusRef.current !== 'speaking') {
-            agentStatusRef.current = 'speaking'
-            dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
-          }
-        }
-
-        if (speakingSilenceTimeoutRef.current) {
-          clearTimeout(speakingSilenceTimeoutRef.current)
-          speakingSilenceTimeoutRef.current = undefined
-        }
-      } else {
-        if (!agentSpeakingRef.current) return
-
-        const silenceWindowMs = 800
-        if (speakingSilenceTimeoutRef.current) {
-          clearTimeout(speakingSilenceTimeoutRef.current)
-        }
-        speakingSilenceTimeoutRef.current = setTimeout(() => {
-          const sinceLast = Date.now() - lastAgentSoundTsRef.current
-          if (sinceLast >= silenceWindowMs - 50) {
-            agentSpeakingRef.current = false
-            if (agentStatusRef.current === 'speaking') {
-              agentStatusRef.current = 'listening'
-              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
-            }
-          }
-        }, silenceWindowMs)
-      }
-    })
-
-    return () => {
-      unsubscribe()
-      if (speakingSilenceTimeoutRef.current) {
-        clearTimeout(speakingSilenceTimeoutRef.current)
-        speakingSilenceTimeoutRef.current = undefined
-      }
-    }
-  }, [])
 
   const addMessageSafely = useCallback((message: Message) => {
     if (processedMessageIds.current.has(message.id)) return
@@ -326,7 +260,18 @@ export const useInterview = () => {
             .map(([, chunk]) => chunk)
             .join('')
 
+          // Any LLM text chunk means the agent is speaking.
+          dispatch({ type: 'SET_AGENT_STATUS', payload: 'speaking' })
+
+          // Fallback: if we stop receiving chunks for a while, open mic.
+          if (speakingTimeoutRef.current) {
+            clearTimeout(speakingTimeoutRef.current)
+          }
+
           if (EndFlag) {
+            const chars = ordered.length
+            const estimatedMs = Math.max(3000, Math.min(chars * 55, 12000))
+
             if (!processedMessageIds.current.has(MessageId)) {
               const finalMsg: Message = {
                 id: MessageId,
@@ -355,6 +300,10 @@ export const useInterview = () => {
             }
 
             llmBuffers.current.delete(MessageId)
+
+            speakingTimeoutRef.current = setTimeout(() => {
+              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+            }, estimatedMs)
           } else {
             if (!processedMessageIds.current.has(MessageId)) {
               const streamingMessage: Message = {
@@ -376,6 +325,11 @@ export const useInterview = () => {
                 }
               })
             }
+
+            // If EndFlag never arrives for some reason, still open mic after a hard timeout.
+            speakingTimeoutRef.current = setTimeout(() => {
+              dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
+            }, 10000)
           }
         }
       } catch (error) {
