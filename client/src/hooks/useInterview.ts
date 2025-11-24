@@ -1,5 +1,6 @@
 import { useCallback, useRef, useEffect, useReducer } from 'react'
-import type { Message, ChatSession, VoiceSettings } from '../types'
+import type { Message, ChatSession, VoiceSettings, ZegoRoomMessage } from '../types'
+import { memoryService } from '../services/memory'
 import { ZegoService } from '../services/zego'
 import { digitalHumanAPI } from '../services/digitalHumanAPI'
 
@@ -7,6 +8,13 @@ const generateRtcId = (prefix: string): string => {
   const timestamp = Date.now().toString(36)
   const random = Math.random().toString(36).slice(2, 8)
   return `${prefix}_${timestamp}_${random}`
+}
+
+const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  isEnabled: false,
+  autoPlay: true,
+  speechRate: 1.0,
+  speechPitch: 1.0
 }
 
 interface InterviewState {
@@ -137,13 +145,6 @@ export const useInterview = () => {
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
 
-  const defaultVoiceSettings: VoiceSettings = {
-    isEnabled: false,
-    autoPlay: true,
-    speechRate: 1.0,
-    speechPitch: 1.0,
-  }
-
   const cleanup = useCallback(() => {
     cleanupFunctions.current.forEach(fn => fn())
     cleanupFunctions.current = []
@@ -157,7 +158,9 @@ export const useInterview = () => {
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
-    } catch { }
+    } catch (error) {
+      console.warn('Failed to reset digital human stream on cleanup:', error)
+    }
   }, [])
 
   useEffect(() => {
@@ -190,7 +193,7 @@ export const useInterview = () => {
 
     messageHandlerSetup.current = true
 
-    const handleRoomMessage = (data: any) => {
+    const handleRoomMessage = (data: ZegoRoomMessage) => {
       try {
         const { Cmd, Data: msgData, SeqId } = data
 
@@ -316,7 +319,7 @@ export const useInterview = () => {
     zegoService.current.onRoomMessage(handleRoomMessage)
 
     cleanupFunctions.current.push(() => {
-      zegoService.current.onRoomMessage(() => { })
+      zegoService.current.onRoomMessage(() => undefined)
     })
   }, [addMessageSafely])
 
@@ -349,7 +352,7 @@ export const useInterview = () => {
       if (result.digitalHumanVideoStreamId) {
         console.log(' Configuring digital human video stream:', result.digitalHumanVideoStreamId)
         zegoService.current.setDigitalHumanStream(result.digitalHumanVideoStreamId)
-        zegoService.current.setVoicePreference(defaultVoiceSettings.isEnabled)
+        zegoService.current.setVoicePreference(DEFAULT_VOICE_SETTINGS.isEnabled)
         console.log(' Digital human video stream configured')
       } else {
         console.warn(' No digital human video stream ID received from backend')
@@ -364,7 +367,7 @@ export const useInterview = () => {
         digitalHumanVideoStreamId: result.digitalHumanVideoStreamId,
         digitalHumanId: result.digitalHumanId,
         isActive: true,
-        voiceSettings: defaultVoiceSettings
+        voiceSettings: DEFAULT_VOICE_SETTINGS
       }
 
       dispatch({ type: 'SET_SESSION', payload: newSession })
@@ -450,7 +453,9 @@ export const useInterview = () => {
     const micShouldBeOn = state.agentStatus === 'listening'
     zegoService.current.enableMicrophone(micShouldBeOn).then((ok) => {
       if (ok) dispatch({ type: 'SET_RECORDING', payload: micShouldBeOn })
-    }).catch(() => { })
+    }).catch((error) => {
+      console.warn('Failed to auto-toggle microphone based on agent status:', error)
+    })
   }, [state.agentStatus, state.isConnected])
 
   const toggleVoiceSettings = useCallback(() => {
@@ -483,7 +488,9 @@ export const useInterview = () => {
         await zegoService.current.enableMicrophone(false)
         dispatch({ type: 'SET_RECORDING', payload: false })
       }
-    } catch { }
+    } catch (error) {
+      console.warn('Failed to disable microphone when ending interview:', error)
+    }
 
     try {
       if (state.session?.agentInstanceId) {
@@ -500,6 +507,11 @@ export const useInterview = () => {
     }
 
     cleanup()
+    try {
+      memoryService.clearAllConversations()
+    } catch (error) {
+      console.warn('Failed to clear stored conversations on interview end:', error)
+    }
     dispatch({ type: 'SET_SESSION', payload: null })
     dispatch({ type: 'SET_CONNECTED', payload: false })
     dispatch({ type: 'SET_AGENT_STATUS', payload: 'idle' })
@@ -510,13 +522,17 @@ export const useInterview = () => {
   }, [state.session, state.isConnected, state.isRecording, cleanup])
 
   useEffect(() => {
+    const service = zegoService.current
+
     return () => {
       const session = latestSessionRef.current
       const isConnected = isConnectedRef.current
       const isRecording = isRecordingRef.current
 
       if (isRecording) {
-        zegoService.current.enableMicrophone(false).catch(() => { })
+        service.enableMicrophone(false).catch((error) => {
+          console.warn('Failed to disable microphone during interview cleanup:', error)
+        })
       }
 
       if (session?.agentInstanceId) {
@@ -528,7 +544,7 @@ export const useInterview = () => {
       }
 
       if (isConnected) {
-        zegoService.current.leaveRoom().catch(error => {
+        service.leaveRoom().catch(error => {
           console.warn('Leave room during cleanup failed', error)
         })
       }

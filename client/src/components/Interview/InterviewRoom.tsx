@@ -7,7 +7,7 @@ import { useInterview } from '../../hooks/useInterview'
 import { PhoneOff, Clock } from 'lucide-react'
 import type { Message } from '../../types'
 
-interface InterviewSummary {
+export interface InterviewSummary {
   duration: string
   questionsCount: number
   responsesCount: number
@@ -25,6 +25,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     messages,
     isLoading,
     isConnected,
+    error,
     agentStatus,
     questionsAsked,
     isInterviewComplete,
@@ -101,6 +102,11 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
               <p className={`text-sm font-medium ${statusDisplay.color}`}>
                 {statusDisplay.text}
               </p>
+              {error && (
+                <p className="text-xs text-red-400 mt-1">
+                  {error}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center space-x-4">

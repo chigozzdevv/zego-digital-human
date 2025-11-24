@@ -17,10 +17,6 @@ export const ChatPanel = ({ messages, isTyping }: ChatPanelProps) => {
 
     return (
         <div className="flex flex-col h-full bg-slate-900/50 backdrop-blur-sm">
-            <div className="px-6 py-4 border-b border-slate-700/50">
-                <h2 className="text-lg font-semibold text-slate-200">Conversation</h2>
-            </div>
-
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                 <AnimatePresence initial={false}>
                     {messages.map((message) => (
