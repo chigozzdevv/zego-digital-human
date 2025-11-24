@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { DigitalHuman } from './DigitalHuman'
 import { ChatPanel } from './ChatPanel'
-import { VoiceMessageInput } from '../Voice/VoiceMessageInput'
 import { Button } from '../UI/Button'
 import { useInterview } from '../../hooks/useInterview'
 import { PhoneOff, Clock, Sparkles } from 'lucide-react'
@@ -18,17 +17,11 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
     messages,
     isLoading,
     isConnected,
-    isRecording,
-    currentTranscript,
     agentStatus,
-    session,
     questionsAsked,
     isInterviewComplete,
     startTime,
     startInterview,
-    sendTextMessage,
-    toggleVoiceRecording,
-    toggleVoiceSettings,
     endInterview
   } = useInterview()
 
@@ -160,19 +153,6 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
           />
         </div>
       </div>
-
-      {isConnected && !isInterviewComplete && (
-        <VoiceMessageInput
-          onSendMessage={sendTextMessage}
-          isRecording={isRecording}
-          onToggleRecording={toggleVoiceRecording}
-          currentTranscript={currentTranscript}
-          isConnected={isConnected}
-          voiceEnabled={session?.voiceSettings.isEnabled || false}
-          onToggleVoice={toggleVoiceSettings}
-          agentStatus={agentStatus}
-        />
-      )}
     </div>
   )
 }
