@@ -131,6 +131,8 @@ export const useInterview = () => {
   const asrSeqMap = useRef(new Map<string, number>())
   const llmBuffers = useRef(new Map<string, Map<number, string>>())
   const questionTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const voiceDebounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const pendingVoiceMessageRef = useRef<Message | null>(null)
   const latestSessionRef = useRef<ChatSession | null>(null)
   const isConnectedRef = useRef(false)
   const isRecordingRef = useRef(false)
@@ -149,6 +151,9 @@ export const useInterview = () => {
     messageHandlerSetup.current = false
     if (questionTimeoutRef.current) {
       clearTimeout(questionTimeoutRef.current)
+    }
+    if (voiceDebounceRef.current) {
+      clearTimeout(voiceDebounceRef.current)
     }
     try {
       zegoService.current.setDigitalHumanStream(null)
@@ -203,6 +208,10 @@ export const useInterview = () => {
             dispatch({ type: 'SET_AGENT_STATUS', payload: 'listening' })
 
             if (EndFlag) {
+              if (voiceDebounceRef.current) {
+                clearTimeout(voiceDebounceRef.current)
+              }
+
               const messageId = MessageId || `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
               const userMessage: Message = {
@@ -214,10 +223,17 @@ export const useInterview = () => {
                 transcript: transcript.trim()
               }
 
-              addMessageSafely(userMessage)
-              dispatch({ type: 'SET_TRANSCRIPT', payload: '' })
-              dispatch({ type: 'SET_AGENT_STATUS', payload: 'thinking' })
-              dispatch({ type: 'INCREMENT_QUESTIONS_ASKED' })
+              pendingVoiceMessageRef.current = userMessage
+
+              voiceDebounceRef.current = setTimeout(() => {
+                if (pendingVoiceMessageRef.current) {
+                  addMessageSafely(pendingVoiceMessageRef.current)
+                  dispatch({ type: 'SET_TRANSCRIPT', payload: '' })
+                  dispatch({ type: 'SET_AGENT_STATUS', payload: 'thinking' })
+                  dispatch({ type: 'INCREMENT_QUESTIONS_ASKED' })
+                  pendingVoiceMessageRef.current = null
+                }
+              }, 1500)
 
               asrSeqMap.current.delete(mid)
             }
