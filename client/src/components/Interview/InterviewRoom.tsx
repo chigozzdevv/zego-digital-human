@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { DigitalHuman } from './DigitalHuman'
 import { ChatPanel } from './ChatPanel'
 import { Button } from '../UI/Button'
-import { useInterview } from '../../hooks/useInterview'
+import type { UseInterviewController } from '../../hooks/useInterview'
 import { PhoneOff, Clock } from 'lucide-react'
 import type { Message } from '../../types'
 
@@ -15,36 +15,25 @@ export interface InterviewSummary {
 }
 
 interface InterviewRoomProps {
+  controller: UseInterviewController
   onComplete: (data: InterviewSummary) => void
 }
 
-export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
+export const InterviewRoom = ({ controller, onComplete }: InterviewRoomProps) => {
   const [currentTime, setCurrentTime] = useState(Date.now())
 
   const {
     messages,
     isLoading,
     isConnected,
+    isRecording,
     error,
     agentStatus,
     questionsAsked,
     isInterviewComplete,
     startTime,
-    startInterview,
     endInterview
-  } = useInterview()
-
-  useEffect(() => {
-    const initInterview = async () => {
-      await startInterview()
-      try {
-        await import('../../services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
-      } catch (error) {
-        console.error('Failed to unlock autoplay for digital human:', error)
-      }
-    }
-    initInterview()
-  }, [startInterview])
+  } = controller
 
   useEffect(() => {
     if (!isConnected) return
@@ -116,6 +105,13 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
                     <Clock className="w-4 h-4" />
                     <span className="tabular-nums">{formatDuration(currentTime)}</span>
                   </div>
+
+                  {isRecording && (
+                    <div className="px-3 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-xs font-semibold text-emerald-300">Mic On / Listening</span>
+                    </div>
+                  )}
 
                   <div className="px-3 py-1 bg-blue-500/10 rounded-full">
                     <span className="text-xs font-semibold text-blue-400">

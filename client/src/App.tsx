@@ -2,15 +2,44 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { InterviewRoom, type InterviewSummary } from './components/Interview/InterviewRoom'
 import { Button } from './components/UI/Button'
-import { Bot, Video, Mic, CheckCircle } from 'lucide-react'
+import { Bot, Video, Mic, CheckCircle, Loader2 } from 'lucide-react'
+import { useInterview } from './hooks/useInterview'
 
 type AppState = 'welcome' | 'interview' | 'completed'
 
 function App() {
   const [appState, setAppState] = useState<AppState>('welcome')
   const [interviewData, setInterviewData] = useState<InterviewSummary | null>(null)
-  const handleStartInterview = () => {
-    setAppState('interview')
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
+
+  const interview = useInterview()
+
+  const handleStartInterview = async () => {
+    setIsConnecting(true)
+    setConnectionError(null)
+
+    try {
+      const success = await interview.startInterview()
+
+      if (!success) {
+        setConnectionError(interview.error || 'Failed to start interview. Please try again.')
+        return
+      }
+
+      try {
+        await import('./services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
+      } catch (error) {
+        console.error('Failed to unlock autoplay for digital human:', error)
+      }
+
+      setAppState('interview')
+    } catch (error) {
+      console.error('Failed to start interview from welcome screen:', error)
+      setConnectionError(error instanceof Error ? error.message : 'Failed to start interview. Please try again.')
+    } finally {
+      setIsConnecting(false)
+    }
   }
 
   const handleInterviewComplete = (data: InterviewSummary) => {
@@ -68,12 +97,26 @@ function App() {
                 </div>
               </div>
 
+              {connectionError && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-red-400 text-sm">{connectionError}</p>
+                </div>
+              )}
+
               <Button
                 onClick={handleStartInterview}
+                disabled={isConnecting}
                 size="lg"
                 className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white px-8 py-4 text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Start Interview
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  'Start Interview'
+                )}
               </Button>
 
               <p className="text-sm text-slate-500 mt-6">
@@ -91,7 +134,7 @@ function App() {
             exit={{ opacity: 0 }}
             className="h-screen"
           >
-            <InterviewRoom onComplete={handleInterviewComplete} />
+            <InterviewRoom controller={interview} onComplete={handleInterviewComplete} />
           </motion.div>
         )}
 
