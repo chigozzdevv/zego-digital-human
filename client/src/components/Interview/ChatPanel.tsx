@@ -40,8 +40,8 @@ export const ChatPanel = ({ messages, isTyping }: ChatPanelProps) => {
 
                             <div
                                 className={`max-w-[75%] rounded-2xl px-4 py-3 ${message.sender === 'user'
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-slate-800 text-slate-100'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-800 text-slate-100'
                                     }`}
                             >
                                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>

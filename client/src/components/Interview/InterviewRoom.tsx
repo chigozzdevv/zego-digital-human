@@ -5,9 +5,17 @@ import { ChatPanel } from './ChatPanel'
 import { Button } from '../UI/Button'
 import { useInterview } from '../../hooks/useInterview'
 import { PhoneOff, Clock } from 'lucide-react'
+import type { Message } from '../../types'
+
+interface InterviewSummary {
+  duration: string
+  questionsCount: number
+  responsesCount: number
+  messages: Message[]
+}
 
 interface InterviewRoomProps {
-  onComplete: (data: any) => void
+  onComplete: (data: InterviewSummary) => void
 }
 
 export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
@@ -30,7 +38,9 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
       await startInterview()
       try {
         await import('../../services/zego').then(m => m.ZegoService.getInstance().unlockAutoplay())
-      } catch { }
+      } catch (error) {
+        console.error('Failed to unlock autoplay for digital human:', error)
+      }
     }
     initInterview()
   }, [startInterview])
@@ -124,7 +134,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
         </div>
       </motion.header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         <div className="w-full lg:w-1/2 relative">
           <DigitalHuman
             isConnected={isConnected}
@@ -133,7 +143,7 @@ export const InterviewRoom = ({ onComplete }: InterviewRoomProps) => {
           />
         </div>
 
-        <div className="hidden lg:flex lg:w-1/2 border-l border-slate-800">
+        <div className="w-full lg:w-1/2 border-t lg:border-t-0 lg:border-l border-slate-800 flex">
           <ChatPanel
             messages={messages}
             isTyping={agentStatus === 'thinking' || agentStatus === 'speaking'}

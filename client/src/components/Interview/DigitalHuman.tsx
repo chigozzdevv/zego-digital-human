@@ -10,12 +10,14 @@ interface DigitalHumanProps {
   currentQuestion?: string
 }
 
+type DebugInfo = Record<string, unknown> | null
+
 export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: DigitalHumanProps) => {
   const { isVideoEnabled, isAudioEnabled, toggleVideo, toggleAudio } = useDigitalHuman()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [videoReady, setVideoReady] = useState(false)
-  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo>(null)
 
   // Debug mode - press 'd' key to toggle
   const [showDebug, setShowDebug] = useState(false)
@@ -513,7 +515,7 @@ export const DigitalHuman = ({ isConnected, agentStatus, currentQuestion }: Digi
       )}
 
       {/* Debug Overlay - Press Ctrl+D to toggle */}
-      {showDebug && debugInfo && (
+      {showDebug && debugInfo !== null && (
         <div className="absolute top-16 right-6 bg-black/90 text-white text-xs p-4 rounded-lg max-w-md max-h-96 overflow-auto z-50 font-mono">
           <div className="mb-2 text-green-400 font-bold">
             DEBUG INFO (Ctrl+D to hide)
