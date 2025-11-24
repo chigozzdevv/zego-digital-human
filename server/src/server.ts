@@ -443,14 +443,13 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
     const digitalHumanConfig: any = {
       DigitalHumanConfig: {
         DigitalHumanId: digitalHumanId,
-        ConfigId: 'web',
         ...(reqBackgroundColor ? { BackgroundColor: reqBackgroundColor } : {}),
         Layout: {
           Top: reqLayout?.Top ?? 0,
           Left: reqLayout?.Left ?? 0,
-          Width: Math.min(reqLayout?.Width ?? clamped.width, clamped.width),
-          Height: Math.min(reqLayout?.Height ?? clamped.height, clamped.height),
-          Layer: reqLayout?.Layer ?? 2
+          Width: reqLayout?.Width ?? clamped.width,
+          Height: reqLayout?.Height ?? clamped.height,
+          Layer: reqLayout?.Layer ?? 0
         }
       },
       RTCConfig: {
@@ -591,7 +590,7 @@ app.post('/api/start-digital-human', async (req: Request, res: Response): Promis
       userStreamId,
       digitalHumanId,
       roomId: roomIdRTC,
-      unifiedDigitalHuman: false,  // Separate audio and video streams
+      unifiedDigitalHuman: false,
       note: 'agentStreamId = audio only, digitalHumanVideoStreamId = video only'
     })
 
@@ -611,7 +610,6 @@ app.post('/api/stop', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    // Optional: Log performance metrics
     try {
       const status = await makeZegoRequest('QueryAgentInstanceStatus', {
         AgentInstanceId: agent_instance_id
@@ -924,7 +922,6 @@ app.post('/api/cleanup', async (req: Request, res: Response): Promise<void> => {
 })
 
 
-// Error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction): void => {
   console.error('Unhandled error:', err)
   res.status(500).json({ error: 'Internal server error' })
