@@ -244,9 +244,7 @@ VITE_DEBUG_ENABLED=true
 
 This will show additional logging and debug panels.
 
-## 📝 License
 
-This project is licensed under the MIT License. See LICENSE file for details.
 
 ## 🤝 Contributing
 
